@@ -1,5 +1,47 @@
 # Validació
 
+## Android Auto mínim — estat actual, 3 de novembre de 2026
+
+Branca `feature/android-auto-minimal`, creada després de revisar `feature/android-auto`. Base de codi `8563b0b`, igual que `origin/main` després de `git fetch origin`. Es conserva la documentació pendent anterior. No s'ha fusionat ni publicat res. Guia i llista de fitxers: [ANDROID-AUTO-MINIMAL.md](ANDROID-AUTO-MINIMAL.md).
+
+- `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:lintDebug`, `:app:assembleRelease`: **BUILD SUCCESSFUL** amb JDK local, Gradle 8.4, AGP 8.2.2 i SDK 34. La primera execució ha descarregat Car App Library 1.4.0; la verificació final s'ha fet amb `--offline` i `-PptrackBuildRoot=$env:TEMP/PTrack-auto-minimal-build`.
+- Lint final: **0 errors, 4 avisos**. Dos de còpies de seguretat ja existents; un de versió més recent de la biblioteca (es fixa 1.4.0 compatible amb les eines actuals), i un de servei exportat (necessari per a CarAppService, amb HostValidator debug). Informe a `artifacts/android-auto-minimal/lint-results-debug.html` i `.txt`.
+- Primer lint: tres falsos positius `ForegroundServiceType` al codi existent. El manifest binari de l'APK ja contenia `RecordingService` amb `connectedDevice|location`. Repetir exactament aquest atribut al manifest debug permet al detector d'AGP 8.2 veure'l. No s'ha suprimit el detector ni canviat el codi del registre. Segona execució superada.
+- `./scripts/test-core.ps1`: **32 comprovacions del nucli + 39 d'aprenentatge superades**.
+- `./scripts/test-android-auto-apk.ps1` amb APK debug i release finals: **PASS**. Inspecció `aapt` dels XML binaris: servei exportat, acció `androidx.car.app.CarAppService`, categoria experimental `IOT`, descriptor `template`, metadata i entrada mòbil. Release no declara el client experimental. És una comprovació estàtica de paquet, no d'un host Android Auto.
+- `aapt dump permissions`: llista de permisos idèntica a l'APK anterior. Recursos binaris: contenen exactament `PTRACK` i `Android Auto connected`. `git diff --quiet -- app/src/main app/src/androidTest core-tests`: fonts mòbils, OBD i proves prèvies sense canvis. Dumps del manifest i descriptor guardats a `artifacts/android-auto-minimal/`.
+- `apksigner verify --print-certs`: signatura vàlida i mateix certificat que `artifacts/PTrack-0.1.0-debug.apk`. Certificat SHA-256: `d57b78e1d06d62ce309942ec9a4d392530cb006f530ded9d8298295b0dba0731`. No es coneix directament la signatura instal·lada al Pixel.
+- APK lliurada: `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`, **2.722.906 bytes**. SHA-256: `2c08d1c8fe8c8cee21d39945e69c49ce02079303d9a1b128d6fc4fc18496b719`.
+- APK instrumentada compilada: `artifacts/android-auto-minimal/PTrack-android-auto-minimal-tests.apk`. **No executada**: `adb devices -l` no mostra dispositius. Tampoc s'han executat proves instrumentades anteriors, no es dona per comprovada la regressió al mòbil.
+- **DHU no executat**: executable absent a l'SDK i cap mòbil/emulador disponible. No s'ha instal·lat un DHU sense dispositiu només per simular una prova. **Peugeot no provat**. No s'afirma descoberta al llançador ni renderització dels textos. La guia descriu com distingir registre del servei, filtre del host i error de plantilla amb logs reals.
+
+Les seccions següents són resultats històrics de les fases anteriors; les referències a una APK sense Android Auto corresponen a aquelles versions.
+
+## Estudi Android Auto — 3 de novembre de 2026
+
+Branca `feature/android-auto`, base `origin/main` a `8563b0b`, que ja inclou `3a94ede` d'aprenentatge del consum. L'estudi i la decisió de no implementar un client sense una categoria compatible acreditada són a [ANDROID-AUTO.md](ANDROID-AUTO.md). Canvis exclusivament de documentació; cap prova nova d'integració Android Auto, perquè aquesta integració no existeix.
+
+Resultats d'aquesta execució:
+
+- `./scripts/test-core.ps1`: **32 comprovacions del nucli + 39 d'aprenentatge superades**, sense errors en la repetició amb accés al SDK.
+- `:app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug`: **BUILD SUCCESSFUL**, 61 tasques executades, 50 s. Lint: **0 errors, 2 avisos preexistents** sobre còpies de seguretat.
+- `adb devices`: cap dispositiu connectat. `emulator -list-avds`: cap AVD configurat. Proves instrumentades compilades però **no executades**.
+- DHU no instal·lat a `SDK/extras/google/auto`; cap prova al DHU ni al Peugeot. La compilació no acredita ni Bluetooth físic ni admissió a Android Auto.
+- Diferència de codi respecte d'`origin/main`: cap. Es conserven servei de registre, historial, migració SQLite i aprenentatge del consum.
+
+Ordres de la compilació verificada (PowerShell, JDK 21.0.10 i SDK 34 locals):
+
+```powershell
+$env:JAVA_HOME = 'C:/Program Files/Android/Android Studio/jbr'
+$env:GRADLE_USER_HOME = 'C:/Users/mad93/.gradle'
+./scripts/test-core.ps1
+./gradlew.bat --offline --no-daemon "-PptrackBuildRoot=$env:TEMP/PTrack-android-auto-build" :app:assembleDebug :app:assembleDebugAndroidTest :app:lintDebug
+```
+
+S'ha requerit execució fora del sandbox per accedir a les eines locals. El primer intent de proves dins del sandbox ha mostrat `AccessDeniedException` de `javac` sobre `android.jar`, encara que imprimís els PASS; no es considera una compilació neta. El primer intent Gradle buscava el lock a `C:/.gradle` i ha fallat. La repetició amb `GRADLE_USER_HOME` explícit i accés a les eines ha resolt tots dos problemes sense canviar el codi.
+
+Resultats copiats a `artifacts/android-auto-review/` (directori ignorat per Git): `PTrack-baseline-debug.apk`, `PTrack-baseline-debug-androidTest.apk`, `lint-results-debug.txt` i `lint-results-debug.html`. Són la base existent recompilada, **sense Android Auto**. La configuració Android Auto no és aplicable; el procediment de comprovació del registre amb Android Auto connectat es descriu a l'estudi i encara no s'ha executat.
+
 ## Aprenentatge del consum — 3 de novembre de 2026
 
 Branca `feature/consumption-learning`. Resultats de la versió final:

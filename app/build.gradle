@@ -3,6 +3,11 @@ plugins { id 'com.android.application' }
 if (project.hasProperty('ptrackBuildRoot')) {
     layout.buildDirectory = file("${project.property('ptrackBuildRoot')}/app")
 }
+dependencies {
+    // Stable version compatible with this project's SDK 34 / AGP 8.2 toolchain.
+    // The experimental car entry point exists only in the debug APK.
+    debugImplementation 'androidx.car.app:app:1.4.0'
+}
 android {
     namespace 'cat.ptrack'
     compileSdk 34

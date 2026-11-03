@@ -1,0 +1,4 @@
+<resources>
+    <string name="car_probe_title" translatable="false">PTRACK</string>
+    <string name="car_probe_message" translatable="false">Android Auto connected</string>
+</resources>

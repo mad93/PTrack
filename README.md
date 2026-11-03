@@ -27,11 +27,13 @@ Primera versió Android nativa per a un **Peugeot e-2008 de 2020** i un **ELM327
 
 L’arrencada en segon pla no demana ubicació permanent. Per això, un servei iniciat automàticament pot registrar OBD sense GPS fins que obris l’app amb permís d’ubicació. Obrir-la activa la localització del servei, que pot continuar amb la pantalla apagada. Si no hi ha altitud fiable, el PDF mostra «—»; no inventa desnivell. No s’ha implementat un receptor d’arrencada després de reiniciar el mòbil; les restriccions del fabricant i les aturades forçades poden impedir la detecció automàtica.
 
-## Android Auto: requisit pendent
+## Android Auto: prova mínima experimental
 
-**Aquesta APK encara no inclou Android Auto.** Android Auto no és una projecció lliure de l’activitat del mòbil. La via oficial requereix una categoria admesa i plantilles amb normes específiques; la documentació actual no garanteix una categoria per a un panell OBD amb rellotges propis. No s’ha declarat una categoria fictícia de navegació, multimèdia o IoT.
+La branca `feature/android-auto-minimal` incorpora un client de **Car App Library només a debug** amb el títol **PTRACK** i el missatge **Android Auto connected**. L'APK per provar és `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`. No mostra indicadors ni accedeix a OBD, Bluetooth o SQLite.
 
-El component de telemetria i registre és independent de la pantalla, de manera que un futur client de cotxe podrà consumir les mateixes dades. Cal resoldre la viabilitat de la distribució i de la UI oficial abans de comprometre un panell Android Auto. Una prova de desenvolupador al cotxe no equival a compatibilitat aprovada.
+**Compilada i verificada estàticament; encara no provada amb DHU ni Peugeot.** Declara IoT de manera experimental per descobrir el servei de plantilles; el missatge fix no acredita elegibilitat IoT. El host pot filtrar l'app per categoria/origen de confiança. Google documenta que «Unknown sources» no elimina el control d'origen per a Car App Library. No es garanteix que la instal·lació manual aparegui al vehicle.
+
+[Instal·lació al Pixel 10, opcions de desenvolupador, DHU, prova al Peugeot, alternatives i fitxers modificats](docs/ANDROID-AUTO-MINIMAL.md). [Resultats de les proves](docs/VALIDATION.md). Es conserva l'[estudi anterior](docs/ANDROID-AUTO.md) com a document històric; aquesta prova substitueix la seva decisió de no implementar el client, sense donar per resolta l'acceptació al host ni el futur panell OBD.
 
 Fonts oficials consultades:
 
