@@ -1,5 +1,19 @@
 # Validació
 
+## Aprenentatge del consum — 3 de novembre de 2026
+
+Branca `feature/consumption-learning`. Resultats de la versió final:
+
+- `./scripts/test-core.ps1`: **32 comprovacions existents + 39 noves superades**. Les noves cobreixen consum constant, ponderació per distància, regeneració, conservació d'energia i distància en creuar intervals, configuració de velocitats, confiança, mínims de suport, dades incompletes/impossibles, GPS nul/congelat/salts, buits, duplicats, retrocessos temporals, salts de SOC, càrrega estacionària, fragments curts i pendent conegut/ambigu.
+- `:app:assembleDebug`, `:app:assembleDebugAndroidTest`, `:app:lintDebug`: **BUILD SUCCESSFUL**. Lint: **0 errors i 2 avisos preexistents** sobre còpies de seguretat.
+- Compilació amb JDK local i `--offline -PptrackBuildRoot=$env:TEMP/PTrack-consumption-build`. El primer intent al directori de build de OneDrive ha fallat per `AccessDeniedException`; la destinació temporal ha resolt el bloqueig sense canviar el projecte.
+- `adb devices`: cap dispositiu/emulador connectat. Les proves instrumentades s'han compilat però **no s'han executat**. Ara comproven també migració v1→v2 conservant originals i NULL, selecció de viatges reals/tancats, persistència del perfil, recàlcul idempotent, nous trajectes, canvi d'amplada i consulta sense dades. Cal executar-les en Android abans de donar per validada la migració en un dispositiu.
+- No s'ha validat el model amb un vehicle real. No s'han utilitzat dades sintètiques per omplir el model de producció.
+
+Arquitectura, fitxers, API, filtres i limitacions: [CONSUMPTION-LEARNING.md](CONSUMPTION-LEARNING.md).
+
+## Validació inicial del projecte
+
 Resultat local del 3 de novembre de 2026: `assembleDebug`, `assembleDebugAndroidTest` i `lintDebug` completats. Nucli: **32 comprovacions superades**. Lint: **0 errors i 2 avisos** referits als atributs de còpia de seguretat per a versions antigues d’Android. Les APK de l’app i de proves són a `artifacts/`; el resum Lint s’ha copiat a la mateixa carpeta.
 
 OneDrive ha bloquejat l’eliminació d’un directori temporal durant una compilació incremental. La compilació verificada ha utilitzat `-PptrackBuildRoot=<directori absolut fora de OneDrive>`. Aquesta propietat opcional canvia només la destinació dels fitxers de compilació; el projecte i els fonts es mantenen al workspace.
