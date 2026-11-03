@@ -1,5 +1,18 @@
 # Validació
 
+## Quadre de telemetria Android Auto — 3–4 de novembre de 2026
+
+**Implementat i provat al DHU amb Pixel 10 físic.** Resultats complets, arquitectura, fitxers i límits: [ANDROID-AUTO-DASHBOARD.md](ANDROID-AUTO-DASHBOARD.md).
+
+- APK final: `artifacts/android-auto-dashboard/PTrack-android-auto-dashboard-debug.apk`. Compilació debug, instrumentada, lint i release: **BUILD SUCCESSFUL**. Lint: 0 errors / 6 avisos.
+- Nucli: **32 + 39 + 1065 = 1136 comprovacions superades**. Les noves comproven càlculs, signe del perfil, publicació atòmica, concurrència, caducitat, desconnexió/reconnexió, buits, deduplicació, totals i independència dels observadors.
+- `SmokeInstrumentation` executada al Pixel durant aquesta fase: **PASS**, incloent SQLite, recuperació, aprenentatge, PDF/render i activitat del mòbil. L'últim ajust del limitador de presentació s'ha tornat a provar amb dades canviants i caducitat al DHU.
+- DHU: valors principals simultanis, valors canviants marcats SIMULACIÓ, pàgines Detalls/Bateria, regeneració negativa, càrrega probable estacionada, instantani a velocitat zero, caducitat, desconnexió i reconnexió, sortida/reobertura: **verificats visualment**. Prova sintètica separada del registre real. Captures i logs locals als artefactes.
+- SHA-256 de la base real i del WAL idèntics abans/després de les proves de pantalla. Cap crash del procés final de PTrack observat. Components de prova absents del manifest release.
+- Simulació aturada amb `Scenario real`; pantalla final `--` / Desconnectat, sense marca de simulació, verificada. **No s'han provat aquestes lectures al Peugeot ni amb un ELM físic en aquesta fase.**
+
+Les seccions següents documenten les fases anteriors.
+
 ## Projecció real DHU superada — 3 de novembre de 2026
 
 Pixel 10 físic autoritzat per ADB, Android 17 i Android Auto `17.9.664044-release`, DHU oficial `2.0-windows` sobre Windows. `Install` retorna **Success** i PackageManager resol `PTrackCarAppService`. Després de netejar una sessió bloquejada d'Android Auto (`IllegalStateException: Already connected`), el DHU ha negociat protocol 1.7 i TLS 1.2 i ha mostrat Android Auto.

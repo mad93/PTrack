@@ -30,7 +30,7 @@ $descriptor = Dump-Apk $DebugApk 'res/xml/automotive_app_desc.xml'
 Require-Text $descriptor 'E: automotiveApp'
 Require-Text $descriptor 'name="template"'
 $releaseManifest = Dump-Apk $ReleaseApk 'AndroidManifest.xml'
-if ($releaseManifest -match 'PTrackCarAppService|com.google.android.gms.car.application') {
+if ($releaseManifest -match 'PTrackCarAppService|CarTestReceiver|com.google.android.gms.car.application') {
     throw 'Experimental car entry point leaked into release'
 }
 Require-Text $releaseManifest 'cat.ptrack.MainActivity'

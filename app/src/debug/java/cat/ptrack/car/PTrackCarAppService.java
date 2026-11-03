@@ -8,7 +8,7 @@ import androidx.car.app.Screen;
 import androidx.car.app.Session;
 import androidx.car.app.validation.HostValidator;
 
-/** Debug-only Android Auto transport probe. It never starts or reads OBD recording. */
+/** Debug-only car entry point. Its screens consume shared telemetry without controlling recording. */
 public final class PTrackCarAppService extends CarAppService {
     @NonNull @Override public HostValidator createHostValidator() {
         // Official development setting: accept test hosts. This class is absent from release.

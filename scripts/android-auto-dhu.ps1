@@ -1,12 +1,14 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Doctor','Build','Install','Start','Run','Logs','Stop')]
+    [ValidateSet('Doctor','Build','Install','Start','Run','Logs','Stop','Simulate')]
     [string]$Action = 'Doctor',
     [string]$Serial,
     [string]$SdkPath,
     [string]$JavaHome,
     [string]$BuildRoot = (Join-Path $env:TEMP 'PTrack-auto-minimal-build'),
     [ValidateRange(1024,65535)][int]$Port = 5277,
+    [ValidateSet('drive','regen','charge','freeze','disconnect','reconnect','real')]
+    [string]$Scenario = 'real',
     [switch]$Offline
 )
 $ErrorActionPreference = 'Stop'
@@ -149,6 +151,13 @@ switch ($Action) {
         Invoke-Adb -Arguments @('-s',$device,'logcat','-d','-v','threadtime') | Set-Content (Join-Path $artifactDir "logcat-$stamp.txt")
         Invoke-Adb -Arguments @('-s',$device,'logcat','-d','-s','PTrackCar:I','*:S') | Write-Host
         Write-Host "Logs saved locally in $artifactDir. Review private information before sharing."
+    }
+    'Simulate' {
+        $device = Select-Device
+        $result = Invoke-Adb -Arguments @('-s',$device,'shell','am','broadcast','-n','cat.ptrack/.car.CarTestReceiver','--es','scenario',$Scenario)
+        $result | Write-Host
+        if (($result -join "`n") -notmatch 'result=-1') { throw 'Test receiver did not accept the command. Install the dashboard debug APK; shell DUMP permission is required.' }
+        Write-Host 'Display fixture only; Bluetooth, LIVE telemetry and trip database are unchanged. Use -Scenario real to restore OBD display.'
     }
     'Stop' {
         $device = Select-Device

@@ -1,5 +1,7 @@
 # PTrack amb Desktop Head Unit
 
+**Versió actual: quadre de telemetria.** La pantalla mínima s'ha ampliat amb dades de `RecordingService`, tres pàgines i una font de prova separada. [Implementació, resultats funcionals i prova al Peugeot](ANDROID-AUTO-DASHBOARD.md). Per injectar dades de pantalla: `./scripts/android-auto-dhu.ps1 -Action Simulate -Scenario drive`; en acabar: `-Scenario real`. La capçalera mostra SIMULACIÓ a totes les pàgines mentre la prova està activa.
+
 **Prova funcional superada el 3 de novembre de 2026:** PTrack apareix al menú del DHU oficial, s'obre des de la icona i mostra **PTRACK / Android Auto connected**. Sortida al menú i reobertura també comprovades. S'ha utilitzat el Pixel 10 físic amb Android 17 i Android Auto `17.9.664044-release`; no cal Hyper-V ni un AVD per aquest flux. **El Peugeot encara no està provat.**
 
 Des de PowerShell, a l'arrel del repositori:

@@ -51,7 +51,7 @@ public final class RecordingService extends Service {
         try {
             if(Build.VERSION.SDK_INT>=29) startForeground(10,notification,ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE | (gps ? ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION : 0));
             else startForeground(10,notification);
-        } catch(RuntimeException e) { state="permission"; stopSelf(); return START_NOT_STICKY; }
+        } catch(RuntimeException e) { setState("permission"); stopSelf(); return START_NOT_STICKY; }
         if(gps)enableGps();
         wakeLock=getSystemService(PowerManager.class).newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,"PTrack:recording");wakeLock.setReferenceCounted(false);wakeLock.acquire(60000);
         running=true; stopping=false; latest=null; advanced.clear();
@@ -68,7 +68,7 @@ public final class RecordingService extends Service {
             int extra=0,rawIndex=0,cycles=0;
             while(!stopping) {
                 try {
-                    state="connecting";
+                    setState("connecting");
                     BluetoothAdapter adapter=getSystemService(BluetoothManager.class).getAdapter();
                     String address=getSharedPreferences("settings",0).getString("address","");
                     if(adapter==null||!adapter.isEnabled()||address.isEmpty()) throw new IllegalStateException("No adapter");
@@ -93,12 +93,13 @@ public final class RecordingService extends Service {
                             boolean fresh=fix!=null && SystemClock.elapsedRealtimeNanos()-fix.getElapsedRealtimeNanos()<10_000_000_000L && fix.hasAccuracy() && fix.getAccuracy()<=30;
                             boolean altitude=fresh && fix.hasAltitude() && fix.hasVerticalAccuracy()&&fix.getVerticalAccuracyMeters()<=10;
                             Sample s=new Sample(System.currentTimeMillis(),values.get("soc"),values.get("voltage"),values.get("current"),values.get("speed"),fresh?fix.getLatitude():null,fresh?fix.getLongitude():null,altitude?fix.getAltitude():null,raw.toString());
-                            accept(s); bad=0; state="connected";
+                            accept(s); bad=0; setState("connected");
                             if(!extras.isEmpty()) {
                                 Profile.Signal signal=extras.get(extra++%extras.size());
                                 String reply=elm.read(signal.request(),signal.response(),signal.did());
                                 double value=signal.decode(reply); store.reading(activeTrip,signal.key(),value,reply);
                                 advanced.put(signal.key(),new Labels(this).n(value,2)+" "+signal.unit());
+                                if(signal.key().equals("charging")) VehicleTelemetry.LIVE.cable(value,SystemClock.elapsedRealtime());
                             }
                             if(++cycles%10==0&&!profile.rawSignals.isEmpty()){
                                 Profile.RawSignal signal=profile.rawSignals.get(rawIndex++%profile.rawSignals.size());
@@ -107,22 +108,22 @@ public final class RecordingService extends Service {
                                 advanced.put(signal.key(),signal.display(reply,new Labels(this)));
                             }
                         } else {
-                            latest=null; advanced.clear(); state="vehicle";
+                            latest=null; advanced.clear(); setState("vehicle");
                             if(activeTrip>=0) store.reading(activeTrip,"invalid_cycle",null,raw.toString());
                             expire(); if(++bad>=3) throw new IllegalStateException("No valid vehicle data");
                         }
                         pause(250);
                     }
-                } catch(SecurityException e) { state="permission"; break; }
-                catch(Exception e) { latest=null; advanced.clear(); if(!stopping) state="missing"; }
+                } catch(SecurityException e) { setState("permission"); break; }
+                catch(Exception e) { latest=null; advanced.clear(); if(!stopping) setState("missing"); }
                 finally { closeSocket(); }
                 if(!stopping) { for(int i=0;i<15&&!stopping;i++) { pause(1000); expire(); } }
             }
-        } catch(Exception e) { state="missing"; }
+        } catch(Exception e) { setState("missing"); }
         finally {
             finishTrip(); latest=null; advanced.clear(); running=false;
             if(wakeLock!=null&&wakeLock.isHeld())wakeLock.release();
-            if(!state.equals("permission")&&!state.equals("reportError")) state="disconnected";
+            if(!state.equals("permission")&&!state.equals("reportError")) setState("disconnected");
             handler.post(()->{stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();});
         }
     }
@@ -130,13 +131,15 @@ public final class RecordingService extends Service {
         if(wakeLock!=null)wakeLock.acquire(60000);
         if(activeTrip<0) activeTrip=store.begin(demo);
         store.add(activeTrip,s); latest=s; lastValid=SystemClock.elapsedRealtime();
+        VehicleTelemetry.LIVE.accept(activeTrip,s,demo,lastValid);
     }
     private void expire() { if(activeTrip>=0 && SystemClock.elapsedRealtime()-lastValid>=45000) finishTrip(); }
     private void finishTrip() {
         long id=activeTrip; activeTrip=-1;
         if(id<0) return;
         store.finish(id);
-        try { new Report(this).generate(store,id); } catch(Exception e) { state="reportError"; }
+        VehicleTelemetry.LIVE.finish(id);
+        try { new Report(this).generate(store,id); } catch(Exception e) { setState("reportError"); }
     }
     private void simulate() {
         long begin=SystemClock.elapsedRealtime();
@@ -144,9 +147,10 @@ public final class RecordingService extends Service {
             double t=(SystemClock.elapsedRealtime()-begin)/1000.0;
             double current=70*Math.sin(t/9)+20;
             accept(new Sample(System.currentTimeMillis(),Math.max(0,60-t/180),370,current,Math.max(0,45+30*Math.sin(t/16)),null,null,120+15*Math.sin(t/20),"{\"simulation\":true}"));
-            state="demo"; pause(1000);
+            setState("demo"); pause(1000);
         }
     }
+    private void setState(String value) { state=value; VehicleTelemetry.LIVE.status(value); }
     private void pause(long ms) { try {Thread.sleep(ms);} catch(InterruptedException e) {Thread.currentThread().interrupt();stopping=true;} }
     private void closeSocket() { BluetoothSocket s=socket; socket=null; if(s!=null)try{s.close();}catch(Exception ignored){} }
     private void enableGps(){

@@ -27,13 +27,15 @@ Primera versió Android nativa per a un **Peugeot e-2008 de 2020** i un **ELM327
 
 L’arrencada en segon pla no demana ubicació permanent. Per això, un servei iniciat automàticament pot registrar OBD sense GPS fins que obris l’app amb permís d’ubicació. Obrir-la activa la localització del servei, que pot continuar amb la pantalla apagada. Si no hi ha altitud fiable, el PDF mostra «—»; no inventa desnivell. No s’ha implementat un receptor d’arrencada després de reiniciar el mòbil; les restriccions del fabricant i les aturades forçades poden impedir la detecció automàtica.
 
-## Android Auto: prova mínima experimental
+## Android Auto: quadre de telemetria experimental
 
-La branca `feature/android-auto-minimal` incorpora un client de **Car App Library només a debug** amb el títol **PTRACK** i el missatge **Android Auto connected**. L'APK per provar és `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`. No mostra indicadors ni accedeix a OBD, Bluetooth o SQLite.
+La branca `feature/android-auto-minimal` amplia el client de **Car App Library només a debug** que ja funcionava: potència, consum mitjà i SOC visibles alhora, amb pantalles Detalls i Bateria per a consum instantani, velocitat, energies, tensió i intensitat. Consumeix les mostres que `RecordingService` ja ha desat i reutilitza `Sample.power()` / `TripStats`; no inicia connexions ni duplica consultes OBD. APK actual: `artifacts/android-auto-dashboard/PTrack-android-auto-dashboard-debug.apk`.
 
-**Prova funcional DHU superada amb Pixel 10, Android 17 i Android Auto 17.9:** PTrack apareix al menú, s'obre des de la seva icona i mostra els dos textos; també s'ha comprovat sortir al menú i reobrir-la. Captures a `artifacts/android-auto-dhu/`. **Peugeot encara no provat.** Declara IoT de manera experimental; això no acredita elegibilitat IoT. Google documenta que «Unknown sources» no elimina el control d'origen per a Car App Library. El resultat en el DHU no garanteix acceptació al vehicle.
+**Quadre provat al DHU amb Pixel 10, Android 17 i Android Auto 17.9:** valors canviants, lectures negatives, velocitat zero, caducitat, desconnexió/reconnexió i navegació verificades amb una font sintètica separada, sempre marcada **SIMULACIÓ**. En acabar s'ha tornat a la font real. Nucli: **1136 comprovacions superades**; proves instrumentades al Pixel: **PASS**. **Lectures reals i acceptació al Peugeot pendents de prova.** Es conserva la categoria IoT experimental de la integració existent; no s'afirma homologació ni compatibilitat garantida al vehicle.
 
-[Instal·lació al Pixel 10, opcions de desenvolupador, DHU, prova al Peugeot, alternatives i fitxers modificats](docs/ANDROID-AUTO-MINIMAL.md). [Resultats de les proves](docs/VALIDATION.md). Es conserva l'[estudi anterior](docs/ANDROID-AUTO.md) com a document històric; aquesta prova substitueix la seva decisió de no implementar el client, sense donar per resolta l'acceptació al host ni el futur panell OBD.
+[Antecedent de la integració mínima i configuració del Pixel 10](docs/ANDROID-AUTO-MINIMAL.md). [Resultats de les proves](docs/VALIDATION.md). Es conserva l'[estudi anterior](docs/ANDROID-AUTO.md) com a document històric; el quadre ja està implementat i validat al DHU, amb la prova física al Peugeot encara pendent.
+
+[Arquitectura del quadre, indicadors, límits de signe/càrrega, escenaris de prova, fitxers i procediment al Peugeot](docs/ANDROID-AUTO-DASHBOARD.md). L'energia entrant inclou regeneració i possible càrrega; no s'inventa una separació. La potència positiva conserva la convenció de descàrrega documentada al perfil e-CMP, que cal contrastar físicament al Peugeot.
 
 Entorn local reutilitzable: [inici ràpid DHU](docs/DHU-QUICKSTART.md). `./scripts/android-auto-dhu.ps1 -Action Doctor` comprova les eines; `-Action Run -Offline` compila, actualitza l'APK al Pixel i inicia el DHU quan el mòbil està autoritzat i el servidor Android Auto està actiu.
 

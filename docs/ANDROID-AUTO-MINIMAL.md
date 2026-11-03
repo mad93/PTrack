@@ -1,5 +1,7 @@
 # Android Auto — prova mínima
 
+> Aquesta prova es conserva com a antecedent. El client funcional s'ha ampliat: [quadre de telemetria, arquitectura i validació DHU actuals](ANDROID-AUTO-DASHBOARD.md).
+
 Data: **3 de novembre de 2026**. Branca: `feature/android-auto-minimal`.
 
 ## Lliurable i resultat
