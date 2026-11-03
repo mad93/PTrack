@@ -35,6 +35,8 @@ La branca `feature/android-auto-minimal` incorpora un client de **Car App Librar
 
 [Instal·lació al Pixel 10, opcions de desenvolupador, DHU, prova al Peugeot, alternatives i fitxers modificats](docs/ANDROID-AUTO-MINIMAL.md). [Resultats de les proves](docs/VALIDATION.md). Es conserva l'[estudi anterior](docs/ANDROID-AUTO.md) com a document històric; aquesta prova substitueix la seva decisió de no implementar el client, sense donar per resolta l'acceptació al host ni el futur panell OBD.
 
+Entorn local reutilitzable: [inici ràpid DHU](docs/DHU-QUICKSTART.md). `./scripts/android-auto-dhu.ps1 -Action Doctor` comprova les eines; `-Action Run -Offline` compila, actualitza l'APK al Pixel i inicia el DHU quan el mòbil està autoritzat i el servidor Android Auto està actiu.
+
 Fonts oficials consultades:
 
 - [Categories Android for Cars](https://developer.android.com/training/cars)

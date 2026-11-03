@@ -1,5 +1,11 @@
 # Validació
 
+## Configuració DHU posterior — 3 de novembre de 2026
+
+DHU oficial 2.0 i ADB 37.0.1 ja instal·lats. Comprovats amb els seus executables. `scripts/android-auto-dhu.ps1 -Action Doctor` i `-Action Build -Offline` executats correctament; APK de la branca actual a `artifacts/android-auto-dhu/PTrack-dhu-debug.apk`. Compilació debug i APK instrumentada completades; lint amb 0 errors i 4 avisos. Selecció automàtica verificada del JDK 17, perquè la instal·lació nova d'Android Studio porta JDK 25 incompatible amb Gradle 8.4.
+
+DHU executat realment amb la configuració guardada `scripts/dhu/ptrack.ini`: la carrega i intenta connectar, però acaba amb **Failed to start Google Automotive Link** a `localhost:5277`. `adb devices -l` no mostra cap dispositiu; no hi ha AVD configurat. `Install` es nega a continuar sense un target autoritzat, comportament comprovat. **No s'ha instal·lat l'APK al Pixel, no hi ha projecció i no s'ha comprovat el menú ni la pantalla mínima.** S'ha demanat connectar el Pixel, autoritzar la depuració USB i iniciar el servidor Android Auto. Instruccions curtes i estat: [DHU-QUICKSTART.md](DHU-QUICKSTART.md). Cap canvi a OBD/Bluetooth/històric/aprenentatge.
+
 ## Android Auto mínim — estat actual, 3 de novembre de 2026
 
 Branca `feature/android-auto-minimal`, creada després de revisar `feature/android-auto`. Base de codi `8563b0b`, igual que `origin/main` després de `git fetch origin`. Es conserva la documentació pendent anterior. No s'ha fusionat ni publicat res. Guia i llista de fitxers: [ANDROID-AUTO-MINIMAL.md](ANDROID-AUTO-MINIMAL.md).

@@ -11,7 +11,7 @@ APK: `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`.
 
 Títol: **PTRACK**. Cos: **Android Auto connected**. El host determina la tipografia i posició, i afegeix els seus controls. El text és fix i només es demana en obrir la pantalla de cotxe; no indica connexió OBD ni una connexió permanent monitorada.
 
-**Encara no s'ha comprovat descoberta ni visualització amb un host Android Auto.** Compilar i validar el paquet no demostra que aparegui al Peugeot. No hi ha cap dispositiu ADB connectat, cap AVD configurat ni DHU instal·lat a l'entorn. El DHU també necessita un Android amb Android Auto: instal·lar només l'executable no resoldria la manca del mòbil.
+**Encara no s'ha comprovat descoberta ni visualització amb un host Android Auto.** Compilar i validar el paquet no demostra que aparegui al Peugeot. A la primera implementació no hi havia dispositiu ADB, AVD ni DHU. En la configuració posterior el DHU 2.0 ja està disponible i s'ha intentat executar, però continua faltant el Pixel autoritzat: [estat actual i script reutilitzable](DHU-QUICKSTART.md). El DHU necessita un Android amb Android Auto; només l'executable no resol la manca del mòbil.
 
 La branca anterior `feature/android-auto` s'ha revisat abans de crear aquesta. Apuntava a `8563b0b`, igual que `origin/main`, amb documentació local pendent i cap implementació de cotxe. S'han conservat aquests documents; l'estudi anterior és històric. No s'ha fusionat a `main`.
 
