@@ -10,15 +10,18 @@ import java.util.List;
 
 public final class Store extends SQLiteOpenHelper {
     public Store(Context context) { this(context,"ptrack.db"); }
-    public Store(Context context,String name) { super(context, name, null, 1); setWriteAheadLoggingEnabled(true); }
+    public Store(Context context,String name) { super(context, name, null, 2); setWriteAheadLoggingEnabled(true); }
     @Override public void onCreate(SQLiteDatabase db) {
         db.execSQL("CREATE TABLE trips(id INTEGER PRIMARY KEY, start INTEGER NOT NULL, end INTEGER, demo INTEGER NOT NULL, status TEXT NOT NULL)");
         db.execSQL("CREATE TABLE samples(id INTEGER PRIMARY KEY, trip INTEGER NOT NULL, time INTEGER NOT NULL, soc REAL, voltage REAL, current REAL, speed REAL, lat REAL, lon REAL, altitude REAL, raw TEXT)");
         db.execSQL("CREATE INDEX sample_trip ON samples(trip,time)");
         db.execSQL("CREATE TABLE readings(id INTEGER PRIMARY KEY, trip INTEGER NOT NULL, time INTEGER NOT NULL, signal TEXT, value REAL, raw TEXT)");
         db.execSQL("CREATE INDEX reading_trip ON readings(trip,time)");
+        ConsumptionRepository.createSchema(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) { throw new IllegalStateException("Migration required"); }
+    @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+        if (oldVersion < 2) ConsumptionRepository.createSchema(db);
+    }
     public long begin(boolean demo) {
         ContentValues v = new ContentValues(); v.put("start", System.currentTimeMillis()); v.put("demo", demo); v.put("status", "recording");
         return getWritableDatabase().insertOrThrow("trips", null, v);

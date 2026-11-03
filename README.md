@@ -55,7 +55,11 @@ Fonts oficials consultades:
 - Els adaptadors econòmics poden rebutjar les ordres de control de flux necessàries per a respostes llargues. En aquest cas, les cel·les poden no estar disponibles encara que les dades bàsiques funcionin.
 - S’implementen els camps `live` del perfil, **no totes les eines del programa Windows**: explorador d’ECUs, lectura de DTC, informes d’avaluació de salut i estimador d’autonomia queden pendents.
 
-## Dades i recuperació
+## Aprenentatge del consum real
+
+Mòdul local independent amb perfils SQLite per velocitat i pendent net observat, filtres de qualitat, mitjana ponderada per distància i indicador de confiança. Sense prou observacions retorna «dades insuficients». La interfície Java per al futur planificador i els límits es documenten a [docs/CONSUMPTION-LEARNING.md](docs/CONSUMPTION-LEARNING.md). Aquesta fase no afegeix planificació ni una pantalla nova.
+
+## Persistència i exportació
 
 La base de dades és privada de l’app. Els informes automàtics són a `files/reports` dins del seu espai privat; l’exportació en crea una còpia on triïs. Sense xarxa ni núvol, sense còpia automàtica d’Android. Desinstal·lar elimina les dades privades.
 
