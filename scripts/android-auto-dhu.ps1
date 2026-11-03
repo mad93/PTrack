@@ -121,6 +121,9 @@ function Start-Dhu([string]$DeviceSerial) {
     if (Select-String -LiteralPath $logPath -Quiet -Pattern 'Failed to start Google Automotive Link') {
         throw "DHU did not establish a projection link. Start the Pixel head unit server and check $logPath."
     }
+    if (Select-String -LiteralPath $logPath -Quiet -Pattern 'Failed to read from transport') {
+        throw "Android Auto disconnected during negotiation. Check $logPath and -Action Logs; restart the Pixel head unit server before retrying. A TCP connection alone is not a successful projection."
+    }
 }
 
 switch ($Action) {

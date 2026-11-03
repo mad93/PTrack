@@ -11,7 +11,7 @@ APK: `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`.
 
 Títol: **PTRACK**. Cos: **Android Auto connected**. El host determina la tipografia i posició, i afegeix els seus controls. El text és fix i només es demana en obrir la pantalla de cotxe; no indica connexió OBD ni una connexió permanent monitorada.
 
-**Encara no s'ha comprovat descoberta ni visualització amb un host Android Auto.** Compilar i validar el paquet no demostra que aparegui al Peugeot. A la primera implementació no hi havia dispositiu ADB, AVD ni DHU. En la configuració posterior el DHU 2.0 ja està disponible i s'ha intentat executar, però continua faltant el Pixel autoritzat: [estat actual i script reutilitzable](DHU-QUICKSTART.md). El DHU necessita un Android amb Android Auto; només l'executable no resol la manca del mòbil.
+**Descoberta i visualització verificades al DHU oficial 2.0**, amb el Pixel 10 real (Android 17, Android Auto `17.9.664044-release`). L'APK s'ha actualitzat amb ADB, s'ha vist PTrack al menú i s'ha obert/reobert des de la seva icona amb els dos textos exactes. Captura: `artifacts/android-auto-dhu/ptrack-minimal-verified.png`; menú: `dhu-menu-page4.png`. **No s'ha provat al Peugeot.** A la primera implementació només hi havia validació estàtica; el resultat funcional posterior es documenta a [DHU-QUICKSTART.md](DHU-QUICKSTART.md).
 
 La branca anterior `feature/android-auto` s'ha revisat abans de crear aquesta. Apuntava a `8563b0b`, igual que `origin/main`, amb documentació local pendent i cap implementació de cotxe. S'han conservat aquests documents; l'estudi anterior és històric. No s'ha fusionat a `main`.
 
@@ -80,7 +80,7 @@ adb forward tcp:5277 tcp:5277
 
 Si no tens `ANDROID_HOME`, substitueix-lo pel directori del SDK. Accepta al Pixel els diàlegs inicials. Obre el llançador del DHU → PTrack. Comprova títol i missatge, surt i torna-hi a entrar, i comprova que el mòbil continua obrint PTrack normalment. Desa captura i versions del Pixel/Android Auto/DHU. En acabar: `adb forward --remove tcp:5277` i atura el servidor al Pixel.
 
-[Instruccions oficials del DHU](https://developer.android.com/training/cars/testing/dhu). Aquesta prova queda pendent; no s'ha substituït per un dibuix de la pantalla.
+[Instruccions oficials del DHU](https://developer.android.com/training/cars/testing/dhu). La prova del menú, obertura i reobertura de PTrack s'ha executat amb èxit. No s'han provat encara tots els escenaris de reconnexió o regressió OBD; el Peugeot continua pendent.
 
 ## Prova al Peugeot
 

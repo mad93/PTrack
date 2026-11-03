@@ -1,5 +1,13 @@
 # Validació
 
+## Projecció real DHU superada — 3 de novembre de 2026
+
+Pixel 10 físic autoritzat per ADB, Android 17 i Android Auto `17.9.664044-release`, DHU oficial `2.0-windows` sobre Windows. `Install` retorna **Success** i PackageManager resol `PTrackCarAppService`. Després de netejar una sessió bloquejada d'Android Auto (`IllegalStateException: Already connected`), el DHU ha negociat protocol 1.7 i TLS 1.2 i ha mostrat Android Auto.
+
+**Resultats executats:** icona **PTrack** visible al menú del DHU; obertura des de la icona; títol **PTRACK** i cos **Android Auto connected** visibles; retorn al menú i reobertura correctes. Captures natives del DHU inspeccionades: `artifacts/android-auto-dhu/dhu-menu-page4.png` i `ptrack-minimal-verified.png`. Logs `Android Auto session created` i `Minimal template requested by host` observats. Sessió correcta del script: `dhu-20261103-232458.log`. Guia reproduïble: [DHU-QUICKSTART.md](DHU-QUICKSTART.md).
+
+No s'ha utilitzat cap AVD, Hyper-V, root, publicació Play ni modificació del vehicle. No s'ha provat al Peugeot ni amb captura OBD activa, ni s'han executat les proves instrumentades de regressió en aquesta sessió. La validació funcional és de descoberta i renderització al DHU; no certifica l'acceptació al vehicle. Els estats de bloqueig de les seccions següents són històrics.
+
 ## Configuració DHU posterior — 3 de novembre de 2026
 
 DHU oficial 2.0 i ADB 37.0.1 ja instal·lats. Comprovats amb els seus executables. `scripts/android-auto-dhu.ps1 -Action Doctor` i `-Action Build -Offline` executats correctament; APK de la branca actual a `artifacts/android-auto-dhu/PTrack-dhu-debug.apk`. Compilació debug i APK instrumentada completades; lint amb 0 errors i 4 avisos. Selecció automàtica verificada del JDK 17, perquè la instal·lació nova d'Android Studio porta JDK 25 incompatible amb Gradle 8.4.

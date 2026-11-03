@@ -31,7 +31,7 @@ L’arrencada en segon pla no demana ubicació permanent. Per això, un servei i
 
 La branca `feature/android-auto-minimal` incorpora un client de **Car App Library només a debug** amb el títol **PTRACK** i el missatge **Android Auto connected**. L'APK per provar és `artifacts/android-auto-minimal/PTrack-android-auto-minimal-debug.apk`. No mostra indicadors ni accedeix a OBD, Bluetooth o SQLite.
 
-**Compilada i verificada estàticament; encara no provada amb DHU ni Peugeot.** Declara IoT de manera experimental per descobrir el servei de plantilles; el missatge fix no acredita elegibilitat IoT. El host pot filtrar l'app per categoria/origen de confiança. Google documenta que «Unknown sources» no elimina el control d'origen per a Car App Library. No es garanteix que la instal·lació manual aparegui al vehicle.
+**Prova funcional DHU superada amb Pixel 10, Android 17 i Android Auto 17.9:** PTrack apareix al menú, s'obre des de la seva icona i mostra els dos textos; també s'ha comprovat sortir al menú i reobrir-la. Captures a `artifacts/android-auto-dhu/`. **Peugeot encara no provat.** Declara IoT de manera experimental; això no acredita elegibilitat IoT. Google documenta que «Unknown sources» no elimina el control d'origen per a Car App Library. El resultat en el DHU no garanteix acceptació al vehicle.
 
 [Instal·lació al Pixel 10, opcions de desenvolupador, DHU, prova al Peugeot, alternatives i fitxers modificats](docs/ANDROID-AUTO-MINIMAL.md). [Resultats de les proves](docs/VALIDATION.md). Es conserva l'[estudi anterior](docs/ANDROID-AUTO.md) com a document històric; aquesta prova substitueix la seva decisió de no implementar el client, sense donar per resolta l'acceptació al host ni el futur panell OBD.
 

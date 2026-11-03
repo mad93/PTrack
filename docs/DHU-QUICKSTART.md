@@ -1,5 +1,7 @@
 # PTrack amb Desktop Head Unit
 
+**Prova funcional superada el 3 de novembre de 2026:** PTrack apareix al menú del DHU oficial, s'obre des de la icona i mostra **PTRACK / Android Auto connected**. Sortida al menú i reobertura també comprovades. S'ha utilitzat el Pixel 10 físic amb Android 17 i Android Auto `17.9.664044-release`; no cal Hyper-V ni un AVD per aquest flux. **El Peugeot encara no està provat.**
+
 Des de PowerShell, a l'arrel del repositori:
 
 ```powershell
@@ -33,7 +35,18 @@ APK i diagnòstic: `artifacts/android-auto-dhu/` (ignorat per Git). `Logs` guard
 
 El script llegeix `sdk.dir` de `local.properties` i permet `-SdkPath` / `-JavaHome`. Detecta un JDK **17** complet; el JDK 25 d'Android Studio actual no és compatible amb Gradle 8.4. Compila fora de OneDrive, a `$env:TEMP/PTrack-auto-minimal-build`, sense canviar els fonts de PTrack.
 
-## Comprovació d'aquest PC — 3 de novembre de 2026
+## Prova funcional amb el Pixel — 3 de novembre de 2026
+
+- `Install`: **Success**. PackageManager resol `cat.ptrack/.car.PTrackCarAppService`. Actualització amb `-r`, sense desinstal·lar ni esborrar dades.
+- `Start`: túnel ADB `tcp:5277 → tcp:5277`, protocol Android Auto **1.7**, TLS **1.2**, verificació del certificat correcta.
+- Primera connexió bloquejada: el servidor escoltava però no processava les connexions; després ha aparegut un crash del procés Android Auto amb `java.lang.IllegalStateException: Already connected`, a `DeveloperHeadUnitNetworkService`. S'ha tancat el DHU, aturat només Android Auto amb `am force-stop` i l'usuari n'ha reobert els ajustos i iniciat el servidor. La connexió posterior ha projectat Android Auto correctament. No s'han esborrat dades.
+- El validador havia mostrat `Package DENIED; failed all other checks [cat.ptrack]` durant la sessió fallida. Això **no ha impedit** la prova DHU posterior: el host ha creat la sessió i ha renderitzat PTrack. No s'utilitza aquell avís transitori com a prova d'un bloqueig definitiu d'origen.
+- Captures obtingudes amb l'ordre nativa `screenshot` del DHU i inspeccionades: `artifacts/android-auto-dhu/dhu-menu-page4.png` (icona **PTrack**) i `ptrack-minimal-verified.png` (pantalla exacta). La captura Windows de Computer Use havia fallat per timeout; l'ordre nativa del DHU ha permès verificar la projecció directament.
+- Navegació executada amb ordres natives `keycode home` i `tap`: tornar al menú, localitzar PTrack, prémer-ne la icona i tornar a veure el missatge. Log `PTrackCar: Minimal template requested by host` guardat a `ptrack-session.txt`.
+- Sessió correcta amb el script: `artifacts/android-auto-dhu/dhu-20261103-232458.log`. S'ha deixat el DHU obert mostrant PTrack. Cap prova al vehicle ni prova de regressió amb l'OBD actiu; cap indicador OBD implementat.
+- El script ara detecta també `Failed to read from transport`, encara que DHU retorni codi zero. Per automatització, l'execució necessita una consola interactiva/PTY: stdin tancat fa acabar el DHU immediatament. Des d'una PowerShell normal el script manté aquesta consola.
+
+## Comprovació inicial del PC — abans de connectar el Pixel
 
 - SDK existent: `C:/Users/mad93/AppData/Local/Android/Sdk`.
 - ADB existent: `37.0.1-15733141`, protocol `1.0.41`.
