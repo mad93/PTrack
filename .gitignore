@@ -1,0 +1,8 @@
+.reference/
+.gradle/
+**/build/
+local.properties
+*.iml
+.idea/
+test-output/
+artifacts/

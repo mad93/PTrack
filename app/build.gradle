@@ -1,0 +1,11 @@
+plugins { id 'com.android.application' }
+// Optional output location for workspaces synced by OneDrive, which may lock build directories.
+if (project.hasProperty('ptrackBuildRoot')) {
+    layout.buildDirectory = file("${project.property('ptrackBuildRoot')}/app")
+}
+android {
+    namespace 'cat.ptrack'
+    compileSdk 34
+    defaultConfig { applicationId 'cat.ptrack'; minSdk 26; targetSdk 34; versionCode 1; versionName '0.1.0'; testInstrumentationRunner 'cat.ptrack.SmokeInstrumentation' }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
