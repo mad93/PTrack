@@ -1,5 +1,9 @@
 # PTrack amb Desktop Head Unit
 
+Per a la prova física del cotxe, segueix [Android Auto al vehicle](ANDROID-AUTO-VEHICLE.md). `Install` i `Run` d'aquest script instal·len amb ADB per desenvolupar al DHU; no conserven necessàriament l'origen configurat amb KingInstaller o Play.
+
+**Fase actual (4/11/2026):** [quadre gràfic i build visible](ANDROID-AUTO-GRAPHICS.md). `Start` admet `-Profile Normal` (800×480), `Wide` (1280×720) i `Narrow` (400×720 lògics dins 1280×720 amb marge). Tanca el DHU abans de canviar de perfil. `Simulate` també admet `standstill` i `finish`; torna sempre a `-Scenario real`. El peu de l'app del mòbil identifica l'APK instal·lada. **Al Peugeot l'usuari no veu PTrack al menú: encara no funciona al vehicle.** Els resultats de la pantalla mínima que segueixen són històrics.
+
 **Versió actual: quadre de telemetria.** La pantalla mínima s'ha ampliat amb dades de `RecordingService`, tres pàgines i una font de prova separada. [Implementació, resultats funcionals i prova al Peugeot](ANDROID-AUTO-DASHBOARD.md). Per injectar dades de pantalla: `./scripts/android-auto-dhu.ps1 -Action Simulate -Scenario drive`; en acabar: `-Scenario real`. La capçalera mostra SIMULACIÓ a totes les pàgines mentre la prova està activa.
 
 **Prova funcional superada el 3 de novembre de 2026:** PTrack apareix al menú del DHU oficial, s'obre des de la icona i mostra **PTRACK / Android Auto connected**. Sortida al menú i reobertura també comprovades. S'ha utilitzat el Pixel 10 físic amb Android 17 i Android Auto `17.9.664044-release`; no cal Hyper-V ni un AVD per aquest flux. **El Peugeot encara no està provat.**
@@ -35,7 +39,7 @@ Ordres separades per reutilitzar una compilació:
 
 APK i diagnòstic: `artifacts/android-auto-dhu/` (ignorat per Git). `Logs` guarda PackageManager i Logcat localment, sense buidar-los. Revisa dades privades abans de compartir-los. L'acció `Start` guarda el log del DHU i detecta el seu error de connexió encara que l'executable retorni codi zero. No sobreescriu túnels d'altres dispositius; si el port està ocupat, usa `-Port 5278`.
 
-El script llegeix `sdk.dir` de `local.properties` i permet `-SdkPath` / `-JavaHome`. Detecta un JDK **17** complet; el JDK 25 d'Android Studio actual no és compatible amb Gradle 8.4. Compila fora de OneDrive, a `$env:TEMP/PTrack-auto-minimal-build`, sense canviar els fonts de PTrack.
+El script llegeix `sdk.dir` de `local.properties` i permet `-SdkPath` / `-JavaHome`. Detecta un JDK **17** complet per a Kotlin 2.3.21 / AGP 8.13.2 / Gradle 8.13. Compila fora de OneDrive, a `$env:TEMP/PTrack-auto-minimal-build`, sense canviar els fonts de PTrack. La primera compilació després de migrar a Kotlin s'ha de fer sense `-Offline` per completar les dependències; després es pot reutilitzar la memòria cau.
 
 ## Prova funcional amb el Pixel — 3 de novembre de 2026
 

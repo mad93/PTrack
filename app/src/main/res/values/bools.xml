@@ -1,1 +1,4 @@
-<resources><bool name="companion_presence_supported">false</bool></resources>
+<resources>
+    <bool name="companion_presence_supported">false</bool>
+    <bool name="car_test_enabled">false</bool>
+</resources>

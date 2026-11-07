@@ -1,5 +1,129 @@
 # Validació
 
+## Mapa d'Espanya sense illes al Pixel — 8/11/2026
+
+- Paquet `PTrack-Mapa-Espanya-sense-illes.zip`, generat el 7/11 amb Valhalla 3.9.1 a partir de l'extracte OSM de Geofabrik del 5/11 i 109 fitxers d'elevació de Mapzen. Cobreix l'Espanya peninsular, Ceuta i Melilla. Mida del ZIP **1.897.361.887 bytes** i del paquet extret **3.006.985.245 bytes**. SHA-256 verificat a l'ordinador i al Pixel `bb4979681ca4a2aac8bd54516023c0a75685abd0ee7af752396b9ffdba80ac71`.
+- A l'ordinador, el graf empaquetat ha calculat Barcelona Sants–Madrid Atocha (**619,344 km** i **20.646 mostres d'elevació vàlides**) i una variant de **628,081 km** passant per tres punts CCS seleccionats del NAP. També ha calculat rutes locals a Ceuta i Melilla. Les coordenades de prova de Mallorca i Canàries han retornat l'error de punt fora de cobertura.
+- Al Pixel 10, **Planificador → Importa un mapa de rutes** de PTrack 0.2.0 ha activat el graf nacional. La comprovació del manifest inclou la ruta Barcelona–Madrid amb elevació. El graf actiu de **2.178.744.320 bytes** coincideix amb el de l'ordinador.
+- El planificador ha proposat automàticament **quatre parades** en uns **12 s** amb l'opció **Arribar abans**, bateria inicial del 75%, reserva del 10% i mínim de 50 kW CCS. Amb els valors de prova de 46 kWh útils, 18 kWh/100 km de referència i 100 kW màxims DC, ha estimat **434 min** de trajecte, **80 min** de càrrega i **14%** de bateria al destí. Parades proposades: Repsol CRED La Bisbal (50 kW), àrea de servei de Fraga (180 kW), Saragossa (250 kW) i TotalEnergies Hostal Torremar (100 kW).
+- L'itinerari de prova s'ha tancat sense activar-lo. Els tres valors de prova de capacitat, consum de referència i potència màxima DC queden preomplerts al formulari. La prova s'ha fet al telèfon. La navegació al Peugeot i les estimacions amb dades reals del vehicle queden pendents.
+
+## PTrack 0.2.0 desplegada al Pixel per a la prova al Peugeot — 7/11/2026
+
+- `assembleDebug` i les proves unitàries han passat. APK `artifacts/ptrack-planner-pixel-20261107/PTrack-0.2.0.apk`, paquet `cat.ptrack`, versió 0.2.0 (2), SHA-256 local i instal·lat `FC230F9512A7FBABF69A267C923CC3A65F77F8128FE72DD386A12679B27EB464`. Certificat coincident amb el de la versió 0.1.0 que hi havia al Pixel.
+- Actualització a les 20:43 CET amb **KingInstaller 2.5 i Shizuku 13.6.0**. Play Protect ha completat l'anàlisi autoritzada per l'usuari i ha permès finalitzar la instal·lació.
+- Diagnòstic `artifacts/android-auto-car-check/20261107-204356-976/`. Android 17 i Android Auto 17.9.664044. `installerPackageName=com.android.vending`, `initiatingPackageName=com.google.android.packageinstaller` i `cat.ptrack/.car.PTrackCarAppService` resoluble. Shizuku aturat després de verificar-ho.
+- Còpia prèvia de dades a `%LOCALAPPDATA%\PTrack\Backups\ptrack-before-planner-20261107-203554184.tar`. SQLite ha passat la comprovació d'integritat abans i després de l'actualització i conserva els identificadors dels 3 viatges, les 3.889 mostres i les 4.286 lectures.
+- Oberta la PTrack 0.2.0 al Pixel i importat el mapa pilot de Ceuta. El planificador mostra **Mapa local disponible**. Pendent de prova al Peugeot de l'obertura de l'app i de l'acció **Detalls del trajecte → Navega al pròxim punt**.
+
+## Valhalla Mobile i mapa pilot local — 7/11/2026
+
+- **Valhalla Mobile 0.6.4** substitueix les peticions HTTPS de rutes. A **Planificador → Importa un mapa de rutes**, PTrack valida la ruta del manifest abans d'activar el paquet. El càlcul de parades continua a PTrack. [Format del paquet](EV-PLANNER.md#paquets-de-rutes-locals)
+- Paquet pilot `artifacts/PTrack-Mapa-Pilot-Ceuta.zip`, 11.636.859 bytes, SHA-256 `A710EDED1F27C824F9C14B2E262F13C1712A1E54AC2E4172B13036A94CCC7686`. Valhalla 3.9.1 a l'ordinador ha llegit el graf i calculat la ruta pilot de **7,114 km**, amb **239 mostres d'elevació** entre 1,7 i 73,3 m.
+- `testDebugUnitTest`, `assembleDebug` i `assembleDebugAndroidTest` han passat. Al **Pixel 10**, la instrumentació del paquet temporal separat `cat.ptrack.offlinetest` ha confirmat importació, ruta nativa amb elevació, càlcul elèctric i conservació del mapa després d'un intent de substitució invàlid. Resultat `INSTRUMENTATION_CODE: -1` i `PASS: native offline routing, elevation, EV route and failed map replacement`.
+- Els dos paquets temporals s'han retirat després de la prova. Queda pendent un paquet de cobertura més àmplia i una prova completa amb parades reals de recàrrega i obertura dels navegadors al Peugeot.
+
+## Primera integració de rutes elèctriques i navegació — 7/11/2026
+
+- S'ha afegit **Planificador → Calcula una ruta elèctrica**. Demana l'URL HTTPS de Valhalla i les coordenades, permet ajustar la bateria i la potència i preomple el SOC si hi ha una lectura OBD real i recent. El resultat es pot activar com a itinerari per trams per obrir-lo amb Waze o Google Maps.
+- `testDebugUnitTest` i `compileDebugAndroidTestKotlin` han passat. Les proves sintètiques del motor cobreixen més d'una recàrrega, reserva insuficient i una ruta diferent segons si es prioritza el temps total o els minuts de càrrega.
+- La consulta amb dos punts públics de Barcelona al servidor de demostració de Valhalla ha fallat durant la negociació TLS. La verificació del flux complet amb un servidor configurat, un catàleg carregat i el Pixel queda pendent. [Pla unificat i criteris de finalització](EV-PLANNER.md)
+
+## Traspàs a Waze i Google Maps — 7/11/2026
+
+- La pestanya **Planificador** desa un itinerari manual amb una adreça o unes coordenades per línia i el destí al final. Els dos botons obren el pròxim punt. El progrés només avança quan es marca el punt com a completat. Google Maps també pot previsualitzar els punts pendents en ordre. [Waze Deep Links](https://developers.google.com/waze/deeplinks) · [Google Maps URLs](https://developers.google.com/maps/documentation/urls/get-started)
+- A **Detalls del trajecte** d'Android Auto, amb un itinerari actiu, es mostra l'acció experimental **Navega al pròxim punt** per fer-la servir amb el vehicle estacionat. L'acció delega en el navegador predeterminat del host. [API CarContext](https://developer.android.com/reference/androidx/car/app/CarContext)
+- `testDebugUnitTest` i `compileDebugAndroidTestKotlin` han passat. Les proves cobreixen la codificació d'adreces i coordenades, l'ordre i els límits de les parades de Maps i l'avanç explícit de l'itinerari. L'obertura efectiva dels navegadors al Pixel i el traspàs al DHU i al Peugeot queden pendents.
+
+## Catàleg de recàrrega del NAP — 7/11/2026
+
+- [XML de producció de la DGT](https://nap.dgt.es/datex2/v3/miterd/EnergyInfrastructureTablePublication/electrolineras.xml) descarregat el 7/11. La publicació conté 12.086 emplaçaments i 43.022 elements de connector. El fitxer és un inventari DATEX II amb ubicacions i potències. La mostra no inclou tarifes de recàrrega.
+- PTrack programa la primera descàrrega i una actualització aproximadament setmanal quan hi ha connexió. El botó **Configuració → Punts de recàrrega → Actualitza ara** programa una descàrrega addicional. La data i el recompte corresponen a l'última importació correcta a `charging.db`. La substitució del catàleg és transaccional.
+- `testDebugUnitTest` i `compileDebugAndroidTestKotlin` han passat. El lector Kotlin ha processat l'XML oficial complet (publicació de les 10:16:37 CET) i ha retornat els 12.086 emplaçaments amb identificadors únics i els 43.022 connectors.
+- L'emulador Pixel 10 no ha pogut arrencar perquè l'acceleració de maquinari requerida no estava disponible. S'ha compilat la prova Android que comprova la reversió de SQLite després d'un XML truncat. L'execució d'aquesta prova i la verificació de la tasca programada queden pendents.
+
+## Primera actualització de la PTrack habitual amb KingInstaller i Shizuku — 7/11/2026
+
+- `cat.ptrack` actualitzada sobre la instal·lació existent al Pixel 10 amb Android 17. Paquet i certificat verificats abans d'actualitzar. S'ha desat una còpia local prèvia de SQLite, WAL i preferències fora de OneDrive a `%LOCALAPPDATA%\PTrack\Backups\ptrack-before-20261107-163750.tar`.
+- KingInstaller 2.5 amb Shizuku 13.6.0. Play Protect ha analitzat l'APK amb autorització de l'usuari i ha permès completar l'actualització. APK inicial verificada al Pixel amb SHA-256 `2C99E86A1D7D513E7EC5D2E8B2707CF52FBA343A57B3EFA3F94B677D0EDDD5A0`.
+- Instal·lador `com.android.vending`, iniciador `com.google.android.packageinstaller` i servei `cat.ptrack/.car.PTrackCarAppService` resoluble. Informe `artifacts/android-auto-car-check/20261107-164415-602/`.
+- Migració SQLite de l'esquema 3 al 4 verificada al Pixel amb comprovació d'integritat i comparació de les identitats dels 3 viatges, les 3.889 mostres i les 4.286 lectures. S'han obert la vista mensual, la vista anual i els detalls d'un viatge.
+- La primera comprovació al Pixel ha detectat que l'engranatge quedava sota la barra del sistema a Android 17. S'han aplicat els marges del sistema i la compilació corregida s'ha desplegat sobre la mateixa app amb el mateix certificat, després d'una segona anàlisi autoritzada de Play Protect.
+- **APK definitiva al Pixel a les 16:53:** `artifacts/ptrack-mobile-deploy-20261107-163750043/PTrack-mobil-ajustos.apk`, SHA-256 local i instal·lat `14961CC39DB388C3117ADFA1F7FBC378F2D2BCFA378B3ECDD006220DB3F2D24B`. `assembleDebug` i proves unitàries completades. S'han tornat a verificar l'origen i el servei amb l'informe `artifacts/android-auto-car-check/20261107-165406-240/`. Shizuku s'ha aturat.
+- Verificats al Pixel amb l'APK definitiva els calendaris mensual i anual, el flux de dia a viatge, l'engranatge, el desplegable d'idioma i els controls de còpia amb data de darrera còpia. La segona comprovació d'integritat conserva les mateixes identitats de viatges, mostres i lectures. Queden pendents la prova de Drive entre dos dispositius i la prova de la variant habitual al Peugeot.
+
+## Actualització al Pixel amb l'indicador Bluetooth OBD — 7/11/2026
+
+- **PTrack Prova cotxe actualitzada** al Pixel 10, Android 17 i Android Auto 17.9.664044. Paquet `cat.ptrack.cartest`, versió `0.1.0-car-test`, certificat idèntic al de la instal·lació anterior. La PTrack habitual `cat.ptrack` conserva la data d'actualització anterior.
+- `assembleCarTest` i les proves unitàries han passat. APK `artifacts/obd-action-deploy/PTrack-Prova-cotxe-OBD.apk`. SHA-256 local i instal·lat `3D709BCC771534F2DB59CE5E245DDF13117F42B32E1946630963A831C9A59152`.
+- KingInstaller 2.5 amb Shizuku 13.6.0. La primera sessió va acabar amb `INSTALL_FAILED_VERIFICATION_FAILURE` en tancar-se el diàleg de Play Protect. En repetir-la, l'usuari va autoritzar l'anàlisi de Google. Play Protect va mostrar «Aquesta aplicació sembla segura» i es va completar l'actualització.
+- Android confirma `installerPackageName=com.android.vending`, `initiatingPackageName=com.google.android.packageinstaller` i `cat.ptrack.cartest/cat.ptrack.car.PTrackCarAppService` resoluble. Shizuku aturat després del diagnòstic `artifacts/android-auto-car-check/20261107-151105-594/`. Pendent de prova visual de l'indicador al DHU i al Peugeot i de verificar-ne els estats amb l'adaptador OBD real.
+
+## Prova física positiva comunicada per l'usuari — 7/11/2026
+
+- L'usuari confirma que **PTrack Prova cotxe funciona al Peugeot** després de la instal·lació via KingInstaller 2.5 amb Shizuku oficial 13.6.0 al Pixel 10. Android 17 / Android Auto 17.9.664044. El servei Shizuku s'havia aturat després d'instal·lar.
+- Variant `cat.ptrack.cartest`, APK i hash documentats a sota. La lectura posterior a la instal·lació havia verificat instal·lador `com.android.vending`, iniciador `com.google.android.packageinstaller` i servei de cotxe resoluble. Informe `artifacts/android-auto-car-check/20261106-221311-353/`.
+- Resultat físic reportat per l'usuari; no s'han capturat noves traces des del vehicle ni s'ha confirmat la correcció de totes les lectures OBD. La PTrack habitual `cat.ptrack` encara no s'ha actualitzat amb aquest mètode.
+- [Procediment validat i continuïtat de les actualitzacions](ANDROID-AUTO-VEHICLE.md). Les seccions següents conserven els estats i resultats històrics.
+
+## Preparació de la prova al vehicle — 6/11/2026
+
+- **Via gratuïta preparada, prova física pendent:** [KingInstaller/Shizuku amb variant independent](ANDROID-AUTO-VEHICLE.md). No hi havia cap dispositiu ADB connectat; no s'ha instal·lat res al mòbil ni s'ha verificat el Peugeot en aquesta sessió.
+- APK signada: `artifacts/android-auto-vehicle/PTrack-car-test.apk`, paquet `cat.ptrack.cartest`, etiqueta **PTrack Prova cotxe**, versió `0.1.0-car-test`. Conviu amb l'original sense canviar-ne les dades. SHA-256: `F0A84E450EDAC4A5554C9045ECAA0716471F4052D1C1BA4A270235F25D032388`. `apksigner verify`: PASS.
+- Eines actuals conservades: AGP 9.5.1 / Gradle 9.8.2 / JDK 17 / compileSdk 37 / targetSdk 35. Compilades les variants debug, release i carTest. La primera compilació completa va acabar a lint amb un error del camí Windows a `gradle.properties`, corregit escapant `C\:`; la repetició de lint i proves acaba **BUILD SUCCESSFUL**.
+- Corregit el directori de proves per Kotlin integrat d'AGP 9: `.java.directories` deixava `testDebugUnitTest` com a **NO-SOURCE**; ara utilitza `.kotlin.directories`. **Quatre suites JUnit executades, 0 errors/fallades, 1.202 comprovacions** (39 + 32 + 66 + 1065). No es compta l'execució anterior sense fonts com un èxit de proves.
+- Lint debug i carTest: **0 errors / 16 avisos** cadascun. Informes i XML de tests conservats a `artifacts/android-auto-vehicle/`. Els avisos inclouen target SDK, API obsoletes, recursos i l'allowlist de hosts de la biblioteca; no s'han silenciat globalment.
+- Inspecció de les tres APK: **PASS** per paquet, etiqueta, servei exportat, descriptor compilat `template`, API mínim 1, categoria IOT sense POI, entrada mòbil i estat del receptor. El comprovador segueix el recurs compilat perquè AGP escurça els noms XML en release. Android Auto és ara a `main`; receptor de simulació actiu només a debug. Validació de hosts oficials a release/carTest.
+- Scripts de diagnòstic i inspecció: parser PowerShell PASS. Diagnòstic nou comprovat amb mocks de captura completa, error parcial, filtratge i dispositiu no autoritzat. No modifica instal·lador, logs, serveis ni configuració del telèfon.
+- Límit: compilació, signatura i manifest no acrediten admissió d'Android Auto. KingInstaller és una prova no oficial basada en evidència externa recent, encara sense resultat físic amb PTrack. No s'ha pagat, creat ni publicat cap app a Play Console.
+
+## Migració completa a Kotlin — 4/11/2026
+
+[Abast, fonts, eines, proves i ordres per repetir-les al Pixel](KOTLIN-MIGRATION.md).
+
+- **31 fonts Kotlin, 0 fonts Java propis** a app/proves; tres scripts Gradle Kotlin DSL. Kotlin 2.3.21, Gradle 8.13, AGP 8.13.2, JDK 17. Es conserven minSdk 26 / compileSdk 34 / targetSdk 34, esquema SQLite v3 i resum intern v2.
+- **1.198 comprovacions PASS**, tant a la referència Java com a les suites Kotlin: 32 + 39 + 1065 + 62. Les quatre suites JUnit passen a la build final. Les vuit sentències de creació de taules/índexs s'han comparat amb la referència i són idèntiques; també s'han comparat els triplets de traducció de MainActivity.
+- Passada final `--offline`: **BUILD SUCCESSFUL**, codi zero, amb `testDebugUnitTest`, `assembleDebug`, `assembleDebugAndroidTest`, `lintDebug`, `assembleRelease`. Lint: **0 errors / 8 avisos**. APK debug/release inspeccionades: **PASS**, servei/receptor experimental absents de release. Certificat debug idèntic al de l'APK Java.
+- APK: `artifacts/kotlin-migration/PTrack-kotlin-debug.apk`; SHA-256 `4B08A98E2DF1957BD58232C3C41BD630740C8ADAEF5FC5CFC3A3BC2580961469`; build UTC `2026-11-04T19:52:48.287793300Z`. XML de les proves, lint i log final conservats a `artifacts/kotlin-migration/`.
+- **APK Kotlin instal·lada al Pixel 10 amb `-r`: Success**. MainActivity oberta i peu de build verificat amb UI Automator, amb la mateixa hora UTC indicada a dalt.
+- **Instrumentació Kotlin al Pixel: PASS explícit**. Migracions v1/v2→v3, resums/reobertura/NULL antics, consum, persistència SQLite, recuperació de trajecte interromput, SOC, PDF ca/es/en, renderització i activitat. Log: `artifacts/kotlin-migration/pixel-instrumentation.txt`. Les dues pàgines del PDF català sintètic també s'han inspeccionat visualment.
+- **DHU oficial Wide amb aquesta APK Kotlin: PASS visual**. PTrack principal (770×700 dp, API 8) amb Waze secundària; tres rellotges grans en línia, consum, regeneració, càrrega, aturat, lectures caducades, desconnexió/reconnexió i detalls finalitzats amb totals conservats. Captures sintètiques a `artifacts/kotlin-migration/dhu-*.png`. Simulació desactivada en acabar; `dhu-final-real.png` mostra lectures `--` sense marca de simulació.
+- **Pendent:** nova prova física Bluetooth/OBD i al Peugeot amb Kotlin. Normal/Narrow no repetits amb aquesta APK. Les seccions següents documenten builds Java anteriors.
+- Fonts Java/fixtures i APK anterior guardats localment abans de migrar; dades privades de trajectes no s'han tornat a copiar. Branca mantinguda `feature/android-auto-minimal`; cap merge automàtic.
+
+## Tres rellotges grans en línia segons l'amplada — 4/11/2026
+
+- Regla actual: amplada assignada a PTrack ≥600 dp → una `GridSection` amb tres elements LARGE. Amplada inferior → dues seccions 2+1, LARGE amb alçada ≥600 dp o MEDIUM en espais més baixos. El llindar és una decisió de PTrack; el host continua decidint la geometria final.
+- **Verificat visualment amb la build final** al DHU Wide (PTrack 770×700 dp, Waze secundària) i al DHU Normal (800×400 dp sobre una pantalla 800×480): tres rellotges grans en una sola fila, llegibles i sense solapaments. Captures sintètiques `artifacts/android-auto-graphics/large-row-wide.png` i `large-row-800.png`. La branca estreta no s'ha tornat a validar amb Narrow.
+- Debug + APK instrumentada + lint: **BUILD SUCCESSFUL**, 0 errors / 5 avisos. APK instal·lada al Pixel amb `-r`. Build UTC `2026-11-04T18:37:55.122229200Z`; SHA-256 `84BD8F6F294C142D295EBFF3C021447C11C3CB52A6C38EC5F3C9BD7F4FF1DA2D`. Artefacte actualitzat: `artifacts/android-auto-graphics/PTrack-android-auto-graphics-debug.apk`.
+- Mides observades amb GridSection 1.7.0: SMALL ≈64 px, MEDIUM ≈88 px, LARGE ≈160 px. Són mides d'imatge aproximades d'aquest host, no mides fixes garantides a tots els vehicles. La taula i el criteri de selecció són a `ANDROID-AUTO-GRAPHICS.md`.
+- Canvis d'aquesta revisió limitats a la selecció de distribució a `PTrackCarScreen.java` i documentació. Simulació de pantalla desactivada en acabar. Les seccions següents són resultats de revisions anteriors; no hi ha cap prova nova al Peugeot.
+
+## Distribució 2+1 amb rellotges grans — 4/11/2026
+
+- S'ha substituït `GridTemplate` per `SectionedItemTemplate` amb dues `GridSection`: potència/bateria a dalt i intensitat a baix a l'esquerra. El quart espai queda sense contingut. Biblioteca 1.7.0 i categoria experimental existents conservades.
+- **DHU Wide 1280×720, zona principal 770×700 dp: verificat**, amb Waze al costat i tots tres rellotges visibles. Imatges d'uns 160 px (`GridSection.ITEM_SIZE_LARGE`) amb marge transparent per evitar que els arcs es toquin. Captura `artifacts/android-auto-graphics/sections-wide-final.png`. El límit anterior de 88 px era de la configuració de `GridTemplate`, no un límit general de totes les plantilles.
+- **DHU Normal 800×480, zona principal 800×400 dp: verificat**, els tres rellotges i noms són visibles amb la mida MEDIUM. La mida LARGE en aquesta alçada deixava la segona fila fora de la vista; s'ha afegit adaptació per alçades <600 dp. Captura `sections-800-final.png`. El host governa l'amplada i alineació de les cel·les; no són quadrants amb amplades fixades per PTrack.
+- Debug + APK instrumentada + lint: **BUILD SUCCESSFUL**, 0 errors / 5 avisos. APK final instal·lada amb `-r`, sense desinstal·lar. Build UTC `2026-11-04T18:32:31.429728700Z`, SHA-256 `9F9487811DA71C35DF93D4A900E229D4E97456238FD42237EC558509FE311D01`.
+- Canvis d'aquesta revisió: `PTrackCarScreen.java` (seccions i mida segons alçada), `GaugeRenderer.java` (marge transparent), documentació. Les comprovacions següents documenten les revisions anteriors. Cap prova nova al Peugeot.
+- Regeneració negativa i obertura de Detalls des de la nova capçalera: **verificades visualment** (`sections-wide-regen.png`, `sections-details.png`). En acabar s'ha desactivat la simulació i s'ha tornat a la principal amb font real.
+
+## Revisió visual: rellotges sense targetes ni dades secundàries — 4/11/2026
+
+- Principal simplificada: només els tres rellotges i els seus noms; consum instantani/mitjà, velocitat i estat consultables als detalls. Les anotacions minúscules de sentit del corrent es traslladen als detalls. SOC i energia BMS es mantenen dins del rellotge de bateria.
+- Fons de bitmap transparent, sense rectangle blau; arcs ampliats i números més grans. Prova A/B real al DHU Wide: `ITEM_SIZE_LARGE` dona 64 px, `ITEM_SIZE_MEDIUM` 88 px. Es conserva MEDIUM. Treure text no elimina el límit d'imatge del host ni permet fer ocupar als rellotges tota la superfície.
+- Debug + APK instrumentada + lint: **BUILD SUCCESSFUL**, 0 errors / 5 avisos. Actualització al Pixel: **Success**. Principal i detalls comprovats visualment al DHU amb dades sintètiques, captures `artifacts/android-auto-graphics/clean-medium.png` i `clean-details.png`. Els detalls mostren les dades retirades de la principal sense truncar-les en la prova Wide.
+- Build instal·lada UTC `2026-11-04T18:14:16.014466600Z`. SHA-256 de l'APK `8D01B7A38EC48760D7E3BFE952BF86C0BBF8D50D7DA7D9C17B3AC962389D5714`. Artefacte actualitzat: `artifacts/android-auto-graphics/PTrack-android-auto-graphics-debug.apk`.
+- Canvis d'aquesta revisió a `GaugeRenderer.java`, `PTrackCarScreen.java` i documentació. La simulació de pantalla es desactiva en acabar; no s'ha executat una nova prova al Peugeot.
+
+## Quadre gràfic i build visible — 4 de novembre de 2026
+
+[Resultats, límits i fitxers de la fase actual](ANDROID-AUTO-GRAPHICS.md). Nucli: **1198 comprovacions PASS**. Debug + APK instrumentada + lint i release: **BUILD SUCCESSFUL**. Instrumentació repetida al Pixel després d'afegir el peu: **PASS**, incloent migracions v1/v2→v3, resum automàtic, reobertura i dades antigues/NULL. APK instal·lada amb `-r`, peu verificat visualment i amb UI Automator: debug, AA experimental, `feature/android-auto-minimal`, commit `8c79b70d860e`, `modified`, hora UTC de build `2026-11-04T17:41:40.693603900Z`. Captura local: `artifacts/android-auto-graphics/phone-build-info.png`.
+
+**Peugeot: resultat negatiu reportat per l'usuari.** No apareix a Android Auto ni a la personalització del menú. ADB confirma servei debug resoluble, paquet habilitat i instal·lador local (`null`). Sense rebuig específic conservat a Logcat: el filtre d'origen de confiança és una hipòtesi sustentada per la documentació oficial, no una causa única demostrada amb traces del vehicle.
+
+Continuació de la tasca interrompuda per quota: **DHU Wide 1280×720 executat amb la build final**. PTrack principal (770 dp) + Waze secundària, amb acceleració, regeneració, càrrega, aturat, desconnexió/reconnexió, finalització i caducitat (>10 s) verificades amb captures de SIMULACIÓ. Detall finalitzat amb totals conservats. Waze principal + PTrack secundària no aconseguit: el host substitueix PTrack per la targeta multimèdia activa. El perfil Narrow no és una prova de pantalla partida i els indicadors no s'hi han validat. Lint final: **0 errors / 5 avisos**. Comprovació dels APK debug/release: **PASS**, sense servei experimental ni receptor de prova a release. `test-core.ps1` també detecta automàticament el JDK 17 complet d'aquesta estació.
+
 ## Quadre de telemetria Android Auto — 3–4 de novembre de 2026
 
 **Implementat i provat al DHU amb Pixel 10 físic.** Resultats complets, arquitectura, fitxers i límits: [ANDROID-AUTO-DASHBOARD.md](ANDROID-AUTO-DASHBOARD.md).

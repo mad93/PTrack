@@ -1,0 +1,3 @@
+<resources>
+    <bool name="car_test_enabled">true</bool>
+</resources>

@@ -1,6 +1,10 @@
 # PTrack · Peugeot e-2008
 
-Primera versió Android nativa per a un **Peugeot e-2008 de 2020** i un **ELM327 Bluetooth clàssic (SPP)**. Català per defecte, amb castellà i anglès seleccionables a Configuració. No és una aplicació oficial de Peugeot o Stellantis.
+Aplicació Android nativa escrita en **Kotlin**, per a un **Peugeot e-2008 de 2020** i un **ELM327 Bluetooth clàssic (SPP)**. Català per defecte, amb castellà i anglès seleccionables a Configuració. No és una aplicació oficial de Peugeot o Stellantis.
+
+Migració completa del codi propi i les proves a Kotlin, amb configuració Gradle Kotlin DSL. [Abast, compatibilitat i validació de la migració](docs/KOTLIN-MIGRATION.md).
+
+**Abans d'instal·lar o actualitzar per al cotxe:** segueix la [guia operativa Android Auto](docs/ANDROID-AUTO-VEHICLE.md). Al Pixel s'ha validat **KingInstaller + Shizuku per a cada APK nova**. Les [instruccions de continuïtat](AGENTS.md) ho recorden també a les futures sessions de treball.
 
 ## Què hi ha implementat
 
@@ -17,7 +21,7 @@ Primera versió Android nativa per a un **Peugeot e-2008 de 2020** i un **ELM327
 
 ## Instal·lació i primer ús
 
-1. Instal·la l’APK de desenvolupament `artifacts/PTrack-0.1.0-debug.apk` en un Android 8.0 o superior. En una compilació estàndard també es genera a `app/build/outputs/apk/debug/app-debug.apk`. No està preparada per publicar a Google Play.
+1. Prepara una APK actual en un Android 8.0 o superior. **Si la vols utilitzar al cotxe, instal·la-la o actualitza-la amb [KingInstaller + Shizuku](docs/ANDROID-AUTO-VEHICLE.md), conservant paquet i certificat.** El fitxer històric `artifacts/PTrack-0.1.0-debug.apk` no identifica necessàriament l'última compilació; comprova la variant i la data de build. No està preparada per publicar a Google Play.
 2. Aparella l’ELM327 des dels ajustos Bluetooth d’Android. Aquesta versió no admet ELM327 BLE, Wi-Fi ni USB. «ELM327» no identifica el transport: cal comprovar que el teu adaptador ofereix Bluetooth clàssic.
 3. Obre PTrack, prem **Connecta OBD** i concedeix el permís Bluetooth. Ubicació precisa i notificacions són recomanables, però la telemetria OBD no depèn del GPS.
 4. Selecciona l’adaptador. Amb el vehicle despert, l’app començarà el registre quan obtingui corrent, tensió, SOC i velocitat vàlids.
@@ -28,6 +32,14 @@ Primera versió Android nativa per a un **Peugeot e-2008 de 2020** i un **ELM327
 L’arrencada en segon pla no demana ubicació permanent. Per això, un servei iniciat automàticament pot registrar OBD sense GPS fins que obris l’app amb permís d’ubicació. Obrir-la activa la localització del servei, que pot continuar amb la pantalla apagada. Si no hi ha altitud fiable, el PDF mostra «—»; no inventa desnivell. No s’ha implementat un receptor d’arrencada després de reiniciar el mòbil; les restriccions del fabricant i les aturades forçades poden impedir la detecció automàtica.
 
 ## Android Auto: quadre de telemetria experimental
+
+**7/11/2026 — prova positiva al Peugeot confirmada per l'usuari.** «PTrack Prova cotxe» funciona després d'instal·lar-la amb KingInstaller + Shizuku; Shizuku es va aturar en acabar la instal·lació. [Procediment validat, pas a la PTrack habitual i actualitzacions](docs/ANDROID-AUTO-VEHICLE.md). `carTest` comparteix el codi de l'app habitual i només separa la instal·lació i les dades per a proves. Els paràgrafs datats següents documenten les fases anteriors.
+
+**6/11/2026 — prova al cotxe sense Play Console:** [procediment amb KingInstaller i Shizuku, APK separada i diagnòstic](docs/ANDROID-AUTO-VEHICLE.md). La variant `carTest` (`cat.ptrack.cartest`, **PTrack Prova cotxe**) permet provar una instal·lació nova sense desinstal·lar la PTrack que conté els viatges. És una alternativa no oficial pendent de prova física amb PTrack. «Fonts desconegudes» no habilita les apps Car App Library al vehicle; la via oficial continua sent distribució privada des de Play. No es garanteix l'admissió per haver compilat ni per funcionar al DHU.
+
+La configuració actual inclou Android Auto a `main` i, per tant, també a release; les referències següents a «només debug» descriuen versions anteriors. El receptor de simulació ADB només s'habilita a debug. S'ha retirat la categoria POI sense funcionalitat associada i es conserva IoT experimental.
+
+**Actualització 4/11/2026:** [quadre gràfic, historial ampliat i identificació de build](docs/ANDROID-AUTO-GRAPHICS.md). El mòbil mostra al peu versió/variant, branca, commit, estat dels canvis i hora UTC de compilació. APK actual: `artifacts/android-auto-dhu/PTrack-dhu-debug.apk`. **Prova de l'usuari al Peugeot: PTrack no apareix al menú ni a «Personalitza el menú».** ADB confirma que la variant debug i el servei són presents; l'admissió pel host del vehicle continua pendent. El resultat al DHU no garanteix acceptació al cotxe. Les línies següents descriuen la fase textual anterior.
 
 La branca `feature/android-auto-minimal` amplia el client de **Car App Library només a debug** que ja funcionava: potència, consum mitjà i SOC visibles alhora, amb pantalles Detalls i Bateria per a consum instantani, velocitat, energies, tensió i intensitat. Consumeix les mostres que `RecordingService` ja ha desat i reutilitza `Sample.power()` / `TripStats`; no inicia connexions ni duplica consultes OBD. APK actual: `artifacts/android-auto-dashboard/PTrack-android-auto-dashboard-debug.apk`.
 
@@ -63,7 +75,7 @@ Fonts oficials consultades:
 
 ## Aprenentatge del consum real
 
-Mòdul local independent amb perfils SQLite per velocitat i pendent net observat, filtres de qualitat, mitjana ponderada per distància i indicador de confiança. Sense prou observacions retorna «dades insuficients». La interfície Java per al futur planificador i els límits es documenten a [docs/CONSUMPTION-LEARNING.md](docs/CONSUMPTION-LEARNING.md). Aquesta fase no afegeix planificació ni una pantalla nova.
+Mòdul local independent amb perfils SQLite per velocitat i pendent net observat, filtres de qualitat, mitjana ponderada per distància i indicador de confiança. Sense prou observacions retorna «dades insuficients». El contracte Kotlin per al futur planificador i els límits es documenten a [docs/CONSUMPTION-LEARNING.md](docs/CONSUMPTION-LEARNING.md). Aquesta fase no afegeix planificació ni una pantalla nova.
 
 ## Persistència i exportació
 
@@ -73,16 +85,16 @@ El JSON inclou esquema, vehicle, simulació, metadades del viatge, totes les mos
 
 ## Compilar i comprovar
 
-Requisits: JDK 17–21, Android SDK 34 amb Build Tools 34.0.0. Gradle Wrapper 8.4 inclòs, Android Gradle Plugin 8.2.2. Primera compilació amb xarxa per descarregar dependències. Aquest projecte utilitza el SDK 34 disponible a l’entorn de desenvolupament; cal actualitzar eines i target SDK abans de plantejar la publicació a Play.
+Requisits: **JDK 17**, Android SDK 34 i Build Tools 35.0.0. **Kotlin 2.3.21, Gradle Wrapper 8.13 i Android Gradle Plugin 8.13.2**. Primera compilació amb xarxa per descarregar dependències. `minSdk 26`, `compileSdk 34` i `targetSdk 34` es conserven.
 
 ```powershell
-$env:JAVA_HOME = 'C:/Program Files/Android/Android Studio/jbr'
+$env:JAVA_HOME = "$env:USERPROFILE/.jdks/jbr-17.0.14"
 # Crea local.properties amb sdk.dir=<ruta al teu SDK> (fitxer ignorat per Git).
 ./gradlew.bat :app:assembleDebug :app:lintDebug
 ./scripts/test-core.ps1
 ```
 
-Les proves del nucli comproven integració, regeneració, buits, desnivell, fórmules del perfil, respostes ELM i bloqueig d’ordres d’escriptura. El script admet `JAVA_HOME` i `ANDROID_HOME`; els valors per defecte són els d’aquesta estació Windows. Les proves instrumentades addicionals es descriuen a [docs/VALIDATION.md](docs/VALIDATION.md).
+Les quatre suites Kotlin/JUnit del nucli conserven 1.198 comprovacions d'integració, regeneració, buits, desnivell, perfil, ELM, aprenentatge i telemetria. `test-core.ps1` detecta JDK 17 i executa `:app:testDebugUnitTest`; admet `-Offline` i `-BuildRoot`. Les proves instrumentades es descriuen a [docs/VALIDATION.md](docs/VALIDATION.md).
 
 ## Procedència
 

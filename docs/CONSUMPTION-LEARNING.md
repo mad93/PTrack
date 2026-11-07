@@ -1,5 +1,7 @@
 # Aprenentatge local del consum — fase 1
 
+**Actualització 4/11/2026:** el codi i les proves d'aquest mòdul s'han [migrat íntegrament a Kotlin](KOTLIN-MIGRATION.md), mantenint l'algorisme i l'esquema SQLite. Els fonts actuals són `app/src/main/kotlin/cat/ptrack/Consumption{Model,Learner,Repository}.kt`. La descripció de la fase inicial que segueix conserva els noms Java originals com a registre històric.
+
 Branca: `feature/consumption-learning`. Revisió de l'arquitectura feta abans dels canvis.
 
 ## Dades reals i compatibilitat

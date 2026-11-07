@@ -7,8 +7,9 @@ param(
     [string]$JavaHome,
     [string]$BuildRoot = (Join-Path $env:TEMP 'PTrack-auto-minimal-build'),
     [ValidateRange(1024,65535)][int]$Port = 5277,
-    [ValidateSet('drive','regen','charge','freeze','disconnect','reconnect','real')]
+    [ValidateSet('drive','regen','charge','standstill','freeze','disconnect','reconnect','finish','real')]
     [string]$Scenario = 'real',
+    [ValidateSet('Normal','Wide','Narrow')][string]$Profile = 'Normal',
     [switch]$Offline
 )
 $ErrorActionPreference = 'Stop'
@@ -31,7 +32,8 @@ if (-not $SdkPath -or -not (Test-Path -LiteralPath $SdkPath)) {
 $adbPath = Join-Path $SdkPath 'platform-tools/adb.exe'
 $dhuPath = Join-Path $SdkPath 'extras/google/auto/desktop-head-unit.exe'
 $emulatorPath = Join-Path $SdkPath 'emulator/emulator.exe'
-$dhuConfig = Join-Path $PSScriptRoot 'dhu/ptrack.ini'
+$taskConfigName = switch($Profile){'Wide'{'dhu/wide.ini'}'Narrow'{'dhu/narrow.ini'}default{'dhu/ptrack.ini'}}
+$dhuConfig = Join-Path $PSScriptRoot $taskConfigName
 if (-not (Test-Path -LiteralPath $adbPath)) { throw "ADB missing: $adbPath" }
 # Use the SDK owner's existing ADB keys when invoked by a local automation account.
 # No keys, Android security settings or global environment variables are changed.
@@ -65,14 +67,14 @@ function Build-App {
     $candidates = @($JavaHome, $env:JAVA_HOME)
     $candidates += @(Get-ChildItem "$sdkOwnerProfile/.jdks/*" -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
     $candidates += @(Get-ChildItem 'C:/Program Files/Android/Android Studio*/jbr' -Directory -ErrorAction SilentlyContinue | ForEach-Object FullName)
-    # Recent Studio can bundle JDK 25; Gradle 8.4 cannot run on that JDK.
+    # Match gradle/gradle-daemon-jvm.properties (JDK 17).
     $selectedJava = $candidates | Where-Object {
         $_ -and (Test-Path -LiteralPath (Join-Path $_ 'bin/java.exe')) -and
         (Test-Path -LiteralPath (Join-Path $_ 'lib/jvm.cfg')) -and
         (Test-Path -LiteralPath (Join-Path $_ 'release')) -and
         ((Get-Content -LiteralPath (Join-Path $_ 'release')) -match '^JAVA_VERSION="17[.]')
     } | Select-Object -First 1
-    if (-not $selectedJava) { throw 'A complete JDK 17 is required for the existing Gradle 8.4 toolchain. Pass -JavaHome (Studio JDK 25 is not compatible).' }
+    if (-not $selectedJava) { throw 'A complete JDK 17 is required by gradle/gradle-daemon-jvm.properties. Pass -JavaHome.' }
     $env:JAVA_HOME = $selectedJava
     if (-not $env:GRADLE_USER_HOME) { $env:GRADLE_USER_HOME = Join-Path $sdkOwnerProfile '.gradle' }
     Write-Host "JAVA_HOME=$selectedJava"
@@ -91,6 +93,7 @@ function Install-App([string]$DeviceSerial) {
     if (-not (Test-Path -LiteralPath $apkPath)) { throw 'Run -Action Build first.' }
     # Updating preserves data. Never uninstall to work around a signature mismatch.
     Invoke-Adb -Arguments @('-s',$DeviceSerial,'install','-r',$apkPath) | Write-Host
+    Write-Host 'Local install for DHU development. Unknown sources does not authorize Car App Library apps in a real vehicle; see docs/ANDROID-AUTO-VEHICLE.md.'
     $services = Invoke-Adb -Arguments @('-s',$DeviceSerial,'shell','cmd','package','query-services','--components','-a','androidx.car.app.CarAppService','-p','cat.ptrack')
     $services | Write-Host
     if (($services -join "`n") -notmatch 'PTrackCarAppService') { throw 'PTrack car service not discoverable by Android PackageManager.' }
