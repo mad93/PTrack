@@ -1,5 +1,11 @@
 # Validació
 
+## PTrack 0.2.4 al Pixel — 8/11/2026
+
+- S’han executat les 28 proves unitàries i s’han compilat les proves instrumentades i l’APK de depuració des del commit `26d7084b8ee5` de `main`. L’APK `artifacts/ptrack-pixel-024-20261108/PTrack-0.2.4.apk` conserva el certificat de la 0.2.3. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `9DDC1DE2DD1305FD757A387781BCCA15215549620AC8FE0FEDD8C98A3C69E9D0`.
+- PTrack habitual (`cat.ptrack`) actualitzada a la **0.2.4 (6)** a les 10:42 CET amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l’anàlisi autoritzada. Instal·lador `com.android.vending`, iniciador `com.google.android.packageinstaller` i servei d’Android Auto resoluble. Shizuku aturat. Informe `artifacts/android-auto-car-check/20261108-104253-128/`.
+- Còpia prèvia exportada i verificada a **Baixades** del Pixel (`PTrack-20261108-103652.ptrack.json.gz`). En obrir la versió nova, s’han verificat el perfil actiu e-2008, el darrer SOH, la MAC vinculada i els tres viatges previs al calendari del perfil. Queda pendent la prova amb OBD reals i Android Auto al Peugeot.
+
 ## Perfils de vehicle — 8/11/2026
 
 - Han passat les proves unitàries, inclosos els casos de MAC única, compartida amb el perfil actiu i ambigua. S’han compilat l’APK de depuració i les proves instrumentades.
