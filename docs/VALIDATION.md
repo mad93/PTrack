@@ -1,5 +1,11 @@
 # Validació
 
+## PTrack 0.2.6 al Pixel — 8/11/2026
+
+- Han passat `testDebugUnitTest` i `assembleDebug` des del commit `45b428b94a45` de `main`. L’APK `artifacts/ptrack-pixel-026-20261108/PTrack-0.2.6.apk` conserva el certificat de la 0.2.5. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `943AAD149680234A4F452E943EBE4698BAD8C845BC3FC814876B2558598EE334`.
+- PTrack habitual (`cat.ptrack`) actualitzada a la **0.2.6 (8)** a les 16:33 CET amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l’anàlisi autoritzada. L’instal·lador és `com.android.vending`, l’iniciador és `com.google.android.packageinstaller` i es resol el servei `cat.ptrack.car.PTrackCarAppService`. Shizuku s’ha aturat. Informe `artifacts/android-auto-car-check/20261108-163407-929/`.
+- Còpia prèvia dels viatges exportada i verificada a Baixades (`PTrack-20261108-162818.ptrack.json.gz`). L’app obre amb el perfil actiu e-2008 i mostra el commit esperat. Queda pendent la prova de les rutes amb Google Maps i Waze i la prova al Peugeot.
+
 ## Exportació d’itineraris del planificador — 8/11/2026
 
 - Ha passat `testDebugUnitTest`. Les proves comproven l’ordre de les parades, la divisió dels enllaços de Google Maps segons els límits de l’app i del navegador, i la continuïtat entre les parts. També comproven que la cerca del carregador conserva el nom i la ubicació i que la ruta usa les coordenades del catàleg.
