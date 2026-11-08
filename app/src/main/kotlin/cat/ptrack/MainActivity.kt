@@ -17,6 +17,11 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.activity.ComponentActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.ComposeView
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import androidx.core.view.ViewCompat
@@ -35,18 +40,14 @@ import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
 
-class MainActivity : Activity() {
+class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
     private lateinit var l: Labels
     private lateinit var store: Store
     private lateinit var root: LinearLayout
     private lateinit var body: LinearLayout
-    private var status: TextView? = null
-    private lateinit var charge: TextView
-    private lateinit var advanced: TextView
-    private lateinit var power: Gauge
-    private lateinit var current: Gauge
+    private var liveState by mutableStateOf<LiveUiState?>(null)
     private var exportId = -1L
     private var exportType: String? = null
     private var backupBusy = false
@@ -62,7 +63,6 @@ class MainActivity : Activity() {
     private var selectedDay: LocalDate? = null
     private var openedTrip: Long? = null
     private var allVehicles = false
-    private var vehicleTitle: TextView? = null
     private lateinit var shownVehicleId: String
     private var choosingObdProfile = false
     private var page = 0
@@ -218,7 +218,6 @@ class MainActivity : Activity() {
         body.removeAllViews()
         chargingStatus = null
         chargingRefresh = null
-        vehicleTitle = null
         when (page) {
             0 -> live()
             1 -> openedTrip?.let(::trip) ?: history()
@@ -460,44 +459,52 @@ class MainActivity : Activity() {
     }
 
     private fun live() {
-        vehicleTitle = text("", 17, Color.WHITE).also(body::addView)
-        status = text("", 15, 0xFFBCF46A.toInt()).also(body::addView)
-        val gauges = LinearLayout(this)
-        power = Gauge(this, l.t("Potència", "Potencia", "Power"), "kW", -80.0, 120.0)
-        current = Gauge(this, l.signal("current"), "A", -200.0, 300.0)
-        gauges.addView(power, LinearLayout.LayoutParams(0, dp(210), 1f)); gauges.addView(current, LinearLayout.LayoutParams(0, dp(210), 1f)); body.addView(gauges)
-        charge = text("— %", 38, Color.WHITE).apply { gravity = Gravity.CENTER }; body.addView(charge)
-        body.addView(text(l.t("+ consum   /   − energia cap a la bateria", "+ consumo   /   − energía hacia la batería", "+ discharge   /   − energy into battery"), 12, 0xFF9DB5AA.toInt()).apply { gravity = Gravity.CENTER })
-        body.addView(button(l.t("Connecta OBD", "Conectar OBD", "Connect OBD"), ::connect))
-        body.addView(button(l.t("Atura i desa el viatge", "Detener y guardar viaje", "Stop and save trip")) {
-            setAutomaticRecording(false)
-            if (RecordingService.running) startService(Intent(this, RecordingService::class.java).setAction("stop"))
-        })
-        body.addView(text(l.t("TELEMETRIA DEL VEHICLE", "TELEMETRÍA DEL VEHÍCULO", "VEHICLE TELEMETRY"), 12, 0xFFBCF46A.toInt()))
-        advanced = text("", 14, 0xFFDBE8E0.toInt()); body.addView(advanced); update()
+        update()
+        val labels = l
+        body.addView(ComposeView(this).apply {
+            setContent {
+                PTrackTheme {
+                    liveState?.let { state ->
+                        LiveScreen(state, labels, ::connect, ::stopLiveRecording)
+                    }
+                }
+            }
+        }, LinearLayout.LayoutParams(-1, -2))
     }
+
+    private fun stopLiveRecording() {
+        setAutomaticRecording(false)
+        if (RecordingService.running) {
+            startService(Intent(this, RecordingService::class.java).setAction("stop"))
+        }
+    }
+
     private fun update(vehicle: VehicleProfile = store.vehicles.active()) {
-        val statusView = status ?: return
-        if (!::power.isInitialized) return
-        vehicleTitle?.text = vehicle.label
-        var key = RecordingService.state; var s = RecordingService.latest
-        if (s != null && System.currentTimeMillis() - s.time > 10000) { s = null; key = "vehicle" }
-        statusView.text = l.status(key); power.value(s?.power()); current.value(s?.current); charge.text = if (s == null) "— %" else l.n(s.soc, 1) + " %"
-        val detail = StringBuilder()
-        if (s != null) {
-            detail.append(l.signal("speed")).append("     ").append(l.n(s.speed, 1)).append(" km/h\n")
-            detail.append(l.signal("voltage")).append("     ").append(l.n(s.voltage, 1)).append(" V\n")
+        var key = RecordingService.state
+        var sample = RecordingService.latest
+        if (sample != null && System.currentTimeMillis() - sample.time > 10000) {
+            sample = null
+            key = "vehicle"
         }
-        RecordingService.advanced.toSortedMap().forEach { (key, value) -> detail.append(l.signal(key)).append("     ").append(value).append('\n') }
-        val lastSoh = vehicle.soh
-        if (lastSoh != null && !RecordingService.advanced.containsKey("soh")) {
-            val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, l.locale).format(Date(vehicle.sohAt))
-            detail.append(l.t("Darrer SOH", "Último SOH", "Last SOH")).append("     ")
-                .append(l.n(lastSoh, 1)).append(" % · ").append(date).append('\n')
+        val readings = RecordingService.advanced
+        val detail = buildList {
+            if (sample != null) {
+                add(l.signal("speed") to (l.n(sample.speed, 1) + " km/h"))
+                add(l.signal("voltage") to (l.n(sample.voltage, 1) + " V"))
+            }
+            readings.toSortedMap().forEach { (signal, value) ->
+                add(l.signal(signal) to value)
+            }
+            val lastSoh = vehicle.soh
+            if (lastSoh != null && !readings.containsKey("soh")) {
+                val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, l.locale)
+                    .format(Date(vehicle.sohAt))
+                add(l.t("Darrer SOH", "Último SOH", "Last SOH") to (l.n(lastSoh, 1) + " % · " + date))
+            }
         }
-        if (detail.isEmpty()) detail.append(l.t("Les dades apareixeran quan el vehicle respongui.", "Los datos aparecerán cuando responda el vehículo.", "Data appears when the vehicle responds."))
-        advanced.text = detail.toString()
+        liveState = LiveUiState(vehicle.label, key, sample?.soc, sample?.power(), sample?.current, detail)
     }
+
     private fun permissions(): Boolean {
         val missing = mutableListOf<String>()
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) missing.add(Manifest.permission.BLUETOOTH_CONNECT)
@@ -512,20 +519,20 @@ class MainActivity : Activity() {
         if (activeAddress() == null) { chooseAdapter(); return }
         start(false)
     }
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, results)
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == PLANNER_LOCATION_PERMISSION) {
             val screen = plannerScreen ?: return
             val request = screen.locationRequest ?: return
-            if (results.any { it == PackageManager.PERMISSION_GRANTED }) locatePlannerOrigin()
+            if (grantResults.any { it == PackageManager.PERMISSION_GRANTED }) locatePlannerOrigin()
             else screen.location(request, null)
             return
         }
-        if (requestCode == OBD_SETTINGS_PERMISSION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+        if (requestCode == OBD_SETTINGS_PERMISSION && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             if (page == 2) chooseAdapter(startRecording = false)
-        } else if (requestCode == OBD_CAR_PERMISSION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+        } else if (requestCode == OBD_CAR_PERMISSION && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             chooseCarTrigger()
-        } else if (requestCode == OBD_WAIT_NOTIFICATION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+        } else if (requestCode == OBD_WAIT_NOTIFICATION && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             armObd()
         } else if (requestCode == 30) {
             if (Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {

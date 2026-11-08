@@ -3,6 +3,7 @@ import java.time.Instant
 
 plugins {
     id("com.android.application")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 fun sourceGit(vararg arguments: String): String? = try {
@@ -40,7 +41,10 @@ configure<ApplicationExtension> {
         buildConfigField("String", "BUILD_TIME_UTC", quoted(buildTimeUtc))
         buildConfigField("boolean", "CAR_ENABLED", "true")
     }
-    buildFeatures { buildConfig = true }
+    buildFeatures {
+        buildConfig = true
+        compose = true
+    }
     buildTypes {
         // Separate identity: Play Internal App Sharing re-signs uploads. Keep the
         // installed app and its trip database intact while testing distribution.
@@ -63,6 +67,10 @@ configure<ApplicationExtension> {
 }
 
 dependencies {
+    implementation(platform("androidx.compose:compose-bom:2026.09.00"))
+    implementation("androidx.activity:activity-compose:1.13.0")
+    implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material3.adaptive:adaptive")
     implementation("androidx.core:core-ktx:1.19.1")
     implementation("androidx.car.app:app:1.7.0")
     implementation("io.github.rallista:valhalla-mobile:0.6.4")

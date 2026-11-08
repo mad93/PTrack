@@ -1,5 +1,10 @@
 # Validació
 
+## En directe amb Compose — 8/11/2026
+
+- A la branca `codex/nou-look-compose` han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.
+- L’emulador Pixel 10 s’ha aturat abans d’arrencar per un error d’acceleració de maquinari. Queda pendent comprovar en Android el tema clar i fosc, la disposició en finestres estretes i amples i les accions d’OBD.
+
 ## PTrack 0.2.6 al Pixel — 8/11/2026
 
 - Han passat `testDebugUnitTest` i `assembleDebug` des del commit `45b428b94a45` de `main`. L’APK `artifacts/ptrack-pixel-026-20261108/PTrack-0.2.6.apk` conserva el certificat de la 0.2.5. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `943AAD149680234A4F452E943EBE4698BAD8C845BC3FC814876B2558598EE334`.
