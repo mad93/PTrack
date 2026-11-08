@@ -6,11 +6,13 @@ import android.app.TimePickerDialog
 import android.content.Context
 import android.graphics.Color
 import android.os.Build
+import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.text.InputType
 import android.util.Log
+import android.view.Gravity
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
@@ -69,6 +71,8 @@ internal class PlannerScreen(
     private val destination = EditText(activity)
     private var originPlace: Place? = null
     private var destinationPlace: Place? = null
+    var locationRequest: CancellationSignal? = null
+        private set
     private var placeTarget = origin
     private var picking = false
     private val map = PlannerMap(activity, ::select, ::selectStop) { point ->
@@ -77,6 +81,8 @@ internal class PlannerScreen(
     val mapView get() = map.mapView
     private val calculate = button(t("Calcula les rutes", "Calcula las rutas", "Find routes")) { calculate() }
     private val mapImport = button(t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map"), importMap)
+    private val locationLabel = t("La meva ubicació", "Mi ubicación", "My location")
+    private val myLocation = button(locationLabel, ::requestLocation)
     private val picker = button(t("Tria al mapa", "Elige en el mapa", "Pick on map")) {
         if (!origin.hasFocus() && !destination.hasFocus()) placeTarget = if (originPlace == null) origin else destination
         picking = !picking
@@ -118,7 +124,22 @@ internal class PlannerScreen(
         page.isFocusableInTouchMode = true
         setupPlace(origin, t("Origen", "Origen", "Origin"))
         setupPlace(destination, t("Destí", "Destino", "Destination"))
-        page.addView(row(button(t("La meva ubicació", "Mi ubicación", "My location"), locate), picker))
+        val fields = column().apply {
+            addView(origin)
+            addView(destination)
+        }
+        val swap = button("⇅", ::swapPlaces).apply {
+            contentDescription = t("Intercanvia origen i destí", "Intercambia origen y destino", "Swap origin and destination")
+            tooltipText = contentDescription
+            textSize = 24f
+            setPadding(0, 0, 0, 0)
+        }
+        page.addView(LinearLayout(activity).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(fields, LinearLayout.LayoutParams(0, -2, 1f))
+            addView(swap, LinearLayout.LayoutParams(dp(52), dp(52)))
+        })
+        page.addView(row(myLocation, picker))
         page.addView(vehicleName)
         page.addView(source)
         refreshStartingBattery()
@@ -169,7 +190,24 @@ internal class PlannerScreen(
             "The profile changed. Recalculate the route.")
     }
 
-    fun location(place: Place?) {
+    private fun requestLocation() {
+        locationRequest = CancellationSignal()
+        myLocation.isEnabled = false
+        myLocation.text = t("Localitzant…", "Localizando…", "Locating…")
+        locate()
+    }
+
+    fun cancelLocation() {
+        val request = locationRequest ?: return
+        locationRequest = null
+        request.cancel()
+        myLocation.isEnabled = true
+        myLocation.text = locationLabel
+    }
+
+    fun location(request: CancellationSignal, place: Place?) {
+        if (locationRequest !== request) return
+        cancelLocation()
         if (place == null) status.text = t("Ubicació indisponible. Tria un punt al mapa.",
             "Ubicación no disponible. Elige un punto en el mapa.", "Location unavailable. Pick a point on the map.")
         else setPlace(origin, place)
@@ -177,6 +215,7 @@ internal class PlannerScreen(
 
     fun close() {
         disposed = true
+        cancelLocation()
         hideSuggestions()
         routing.shutdownNow()
         searching.shutdownNow()
@@ -205,29 +244,52 @@ internal class PlannerScreen(
         field.doAfterTextChanged {
             if (!updating) {
                 field.error = null
-                if (field === origin) originPlace = null else destinationPlace = null
+                if (field === origin) {
+                    cancelLocation()
+                    originPlace = null
+                } else destinationPlace = null
                 invalidateRoutes()
                 if (field.hasFocus()) suggest(field)
             }
         }
-        page.addView(field)
     }
 
     private fun place(field: EditText): Place? = if (field === origin) originPlace else destinationPlace
 
     private fun setPlace(field: EditText, value: Place) {
-        if (field === origin) originPlace = value else destinationPlace = value
+        if (field === origin) {
+            cancelLocation()
+            originPlace = value
+        } else destinationPlace = value
         updating = true
         field.setText(value.name)
         field.error = null
         updating = false
+        endpointsChanged()
+    }
+
+    private fun swapPlaces() {
+        cancelLocation()
+        val previousOrigin = originPlace
+        originPlace = destinationPlace
+        destinationPlace = previousOrigin
+        val originText = origin.text.toString()
+        updating = true
+        origin.setText(destination.text.toString())
+        destination.setText(originText)
+        origin.error = null
+        destination.error = null
+        updating = false
+        endpointsChanged()
+    }
+
+    private fun endpointsChanged() {
         picking = false
         map.setPicking(false)
         hideSuggestions()
         hideKeyboard()
         page.requestFocus()
-        invalidateRoutes()
-        drawMap(fit = true)
+        invalidateRoutes(fit = true)
     }
 
     private fun suggest(field: EditText, immediate: Boolean = false, inCatalonia: Boolean = false) {
@@ -525,7 +587,7 @@ internal class PlannerScreen(
         navigate(NavigationPlan(plan.charges.map { it.stop.point.toString() } + request.destination.toString()), maps)
     }
 
-    private fun invalidateRoutes() {
+    private fun invalidateRoutes(fit: Boolean = false) {
         calculation++
         job?.cancel(true)
         busy = false
@@ -538,7 +600,7 @@ internal class PlannerScreen(
         reducedMargin = false
         status.text = ""
         controls()
-        drawMap()
+        drawMap(fit)
         renderResults()
     }
 

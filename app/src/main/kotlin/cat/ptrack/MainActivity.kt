@@ -8,6 +8,8 @@ import android.content.*
 import android.content.pm.PackageManager
 import android.database.Cursor
 import android.graphics.Color
+import android.location.Location
+import android.location.LocationManager
 import android.net.Uri
 import android.os.*
 import android.util.JsonWriter
@@ -15,6 +17,8 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.widget.*
+import androidx.core.content.ContextCompat
+import androidx.core.location.LocationManagerCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -210,6 +214,7 @@ class MainActivity : Activity() {
         buildInfo.setTextIsSelectable(true); root.addView(buildInfo); showPage()
     }
     private fun showPage() {
+        if (page != 3) plannerScreen?.cancelLocation()
         body.removeAllViews()
         chargingStatus = null
         chargingRefresh = null
@@ -304,6 +309,8 @@ class MainActivity : Activity() {
     }
 
     private fun locatePlannerOrigin() {
+        val screen = plannerScreen ?: return
+        val request = screen.locationRequest ?: return
         val fine = Manifest.permission.ACCESS_FINE_LOCATION
         val coarse = Manifest.permission.ACCESS_COARSE_LOCATION
         if (checkSelfPermission(fine) != PackageManager.PERMISSION_GRANTED &&
@@ -311,30 +318,38 @@ class MainActivity : Activity() {
             requestPermissions(arrayOf(fine, coarse), PLANNER_LOCATION_PERMISSION)
             return
         }
-        val manager = getSystemService(android.location.LocationManager::class.java)
-        val providers = manager.getProviders(true)
-        val last = providers.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
-            .maxByOrNull { it.elapsedRealtimeNanos }
-        fun show(location: android.location.Location?) {
-            if (isDestroyed || page != 3) return
+        val manager = getSystemService(LocationManager::class.java)
+        val enabled = manager.getProviders(true)
+        val providers = buildList {
+            if (Build.VERSION.SDK_INT >= 31) add(LocationManager.FUSED_PROVIDER)
+            add(LocationManager.NETWORK_PROVIDER)
+            add(LocationManager.GPS_PROVIDER)
+        }.filter { it in enabled }.iterator()
+        val executor = ContextCompat.getMainExecutor(this)
+        fun show(location: Location?) {
             val place = location?.let {
                 PlannerPlaces.Place(l.t("La meva ubicació", "Mi ubicación", "My location"),
                     ElectricRoutePlanner.Point(it.latitude, it.longitude))
             }
-            plannerScreen?.location(place)
+            screen.location(request, place)
         }
-        if (last != null && SystemClock.elapsedRealtimeNanos() - last.elapsedRealtimeNanos < 120_000_000_000L) {
-            show(last)
-        } else if (Build.VERSION.SDK_INT >= 30) {
-            val provider = listOf(android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.GPS_PROVIDER)
-                .firstOrNull { it in providers }
-            if (provider == null) show(null)
-            else try {
-                manager.getCurrentLocation(provider, null, mainExecutor, ::show)
-            } catch (_: SecurityException) {
-                show(null)
+        fun tryNextProvider() {
+            if (request.isCanceled) return
+            while (providers.hasNext()) {
+                try {
+                    LocationManagerCompat.getCurrentLocation(manager, providers.next(), request, executor) { fix ->
+                        if (fix == null) tryNextProvider() else show(fix)
+                    }
+                    return
+                } catch (_: SecurityException) {
+                    // A provider can require a permission that the user did not grant.
+                } catch (_: IllegalArgumentException) {
+                    // The provider can become unavailable between lookup and request.
+                }
             }
-        } else show(null)
+            show(null)
+        }
+        tryNextProvider()
     }
 
     private fun openNextNavigation(point: String, maps: Boolean) {
@@ -445,8 +460,10 @@ class MainActivity : Activity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
         if (requestCode == PLANNER_LOCATION_PERMISSION) {
-            if (page == 3 && results.any { it == PackageManager.PERMISSION_GRANTED }) locatePlannerOrigin()
-            else plannerScreen?.location(null)
+            val screen = plannerScreen ?: return
+            val request = screen.locationRequest ?: return
+            if (results.any { it == PackageManager.PERMISSION_GRANTED }) locatePlannerOrigin()
+            else screen.location(request, null)
             return
         }
         if (requestCode == OBD_SETTINGS_PERMISSION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
