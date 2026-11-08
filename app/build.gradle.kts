@@ -30,8 +30,8 @@ configure<ApplicationExtension> {
         applicationId = "cat.ptrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 6
+        versionName = "0.2.4"
         manifestPlaceholders["ptrackAppLabel"] = "PTrack"
         testInstrumentationRunner = "cat.ptrack.SmokeInstrumentation"
         buildConfigField("String", "SOURCE_BRANCH", quoted(sourceBranch))
@@ -67,6 +67,7 @@ dependencies {
     implementation("androidx.car.app:app:1.7.0")
     implementation("io.github.rallista:valhalla-mobile:0.6.4")
     implementation("io.github.rallista:valhalla-models-config:0.6.0")
+    implementation("org.maplibre.gl:android-sdk:13.6.1")
     testImplementation("junit:junit:4.13.2")
 }
 

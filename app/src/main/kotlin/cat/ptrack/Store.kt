@@ -8,7 +8,8 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONException
 import org.json.JSONObject
 
-class Store(context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(context, name, null, 4) {
+class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(context, name, null, 6) {
+    internal val vehicles = VehicleProfiles(this)
     init { setWriteAheadLoggingEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE trips(id INTEGER PRIMARY KEY, start INTEGER NOT NULL, end INTEGER, demo INTEGER NOT NULL, status TEXT NOT NULL)")
@@ -17,20 +18,63 @@ class Store(context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(con
         db.execSQL("CREATE TABLE readings(id INTEGER PRIMARY KEY, trip INTEGER NOT NULL, time INTEGER NOT NULL, signal TEXT, value REAL, raw TEXT)")
         db.execSQL("CREATE INDEX reading_trip ON readings(trip,time)")
         ConsumptionRepository.createSchema(db); summarySchema(db); backupSchema(db)
+        dcChargeSchema(db)
+        vehicleSchema(db)
     }
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) ConsumptionRepository.createSchema(db)
         if (oldVersion < 3) summarySchema(db)
         if (oldVersion < 4) backupSchema(db)
+        if (oldVersion < 5) dcChargeSchema(db)
+        if (oldVersion < 6) vehicleSchema(db)
     }
-    fun begin(demo: Boolean): Long = writableDatabase.insertOrThrow("trips", null, ContentValues().apply {
-        put("start", System.currentTimeMillis()); put("demo", demo); put("status", "recording")
+    private fun vehicleSchema(db: SQLiteDatabase) {
+        val initialId = VehicleProfiles.createSchema(db, context.getSharedPreferences("settings", 0).getString("address", null))
+        for (table in listOf("trips", "dc_charge_samples")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN vehicle_id TEXT REFERENCES vehicles(id)")
+            db.execSQL("UPDATE $table SET vehicle_id=?", arrayOf(initialId))
+            db.execSQL("""CREATE TRIGGER ${table}_require_vehicle BEFORE INSERT ON $table
+                WHEN NEW.vehicle_id IS NULL OR NOT EXISTS(SELECT 1 FROM vehicles WHERE id=NEW.vehicle_id)
+                BEGIN SELECT RAISE(ABORT,'Missing vehicle profile'); END""")
+        }
+        db.execSQL("CREATE INDEX trip_vehicle_start ON trips(vehicle_id,start)")
+        db.execSQL("CREATE INDEX dc_vehicle_session ON dc_charge_samples(vehicle_id,session,time)")
+        db.execSQL("""UPDATE vehicles SET (soh,soh_at) = (SELECT value,time FROM readings
+            JOIN trips ON trips.id=readings.trip WHERE signal='soh' AND value BETWEEN 0 AND 100 AND demo=0
+            ORDER BY time DESC,readings.id DESC LIMIT 1) WHERE id=? AND EXISTS(
+                SELECT 1 FROM readings JOIN trips ON trips.id=readings.trip WHERE signal='soh' AND value BETWEEN 0 AND 100 AND demo=0)""",
+            arrayOf(initialId))
+        ConsumptionRepository.addVehicleScope(db)
+    }
+    fun begin(demo: Boolean, vehicleId: String = vehicles.active().id): Long = writableDatabase.insertOrThrow("trips", null, ContentValues().apply {
+        put("start", System.currentTimeMillis()); put("demo", demo); put("status", "recording"); put("vehicle_id", vehicleId)
     })
     private fun summarySchema(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE trip_summaries(trip INTEGER PRIMARY KEY, version INTEGER NOT NULL, stats TEXT NOT NULL)")
     }
     private fun backupSchema(db: SQLiteDatabase) {
         db.execSQL("CREATE TABLE trip_backup_keys(trip INTEGER PRIMARY KEY, backup_key TEXT NOT NULL UNIQUE)")
+    }
+    private fun dcChargeSchema(db: SQLiteDatabase) {
+        db.execSQL("CREATE TABLE dc_charge_samples(id INTEGER PRIMARY KEY, time INTEGER NOT NULL, session INTEGER NOT NULL, soc REAL NOT NULL, kw REAL NOT NULL, pack REAL NOT NULL, ambient REAL NOT NULL)")
+        db.execSQL("CREATE INDEX dc_charge_session ON dc_charge_samples(session)")
+    }
+    internal fun addDcCharge(sample: DcChargeProfile.Observation, vehicleId: String = vehicles.active().id) {
+        writableDatabase.insertOrThrow("dc_charge_samples", null, ContentValues().apply {
+            put("time", sample.time); put("session", sample.session); put("soc", sample.soc)
+            put("kw", sample.kw); put("pack", sample.packC); put("ambient", sample.ambientC)
+            put("vehicle_id", vehicleId)
+        })
+    }
+    internal fun dcChargeProfile(vehicleId: String = vehicles.active().id): DcChargeProfile = readableDatabase.rawQuery(
+        "SELECT session,time,soc,kw,pack,ambient FROM dc_charge_samples WHERE vehicle_id=? AND session IN " +
+            "(SELECT DISTINCT session FROM dc_charge_samples WHERE vehicle_id=? ORDER BY session DESC LIMIT 50) ORDER BY time",
+        arrayOf(vehicleId, vehicleId)
+    ).use { cursor ->
+        DcChargeProfile(buildList {
+            while (cursor.moveToNext()) add(DcChargeProfile.Observation(cursor.getLong(0), cursor.getLong(1),
+                cursor.getDouble(2), cursor.getDouble(3), cursor.getDouble(4), cursor.getDouble(5)))
+        })
     }
     fun recover() {
         val db = writableDatabase
@@ -93,10 +137,14 @@ class Store(context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(con
     }
     private fun buildSummary(id: Long): TripSummary {
         val stats = TripStats(); samples(id).forEach(stats::add)
+        addEnergyReadings(id, stats)
+        return stats.summary()
+    }
+
+    internal fun addEnergyReadings(id: Long, stats: TripStats) {
         readableDatabase.rawQuery("SELECT time,value FROM readings WHERE trip=? AND signal='energy' ORDER BY time,id", arrayOf(id.toString())).use { c ->
             while (c.moveToNext()) stats.energy(c.getLong(0), required(c, 1))
         }
-        return stats.summary()
     }
     private fun saveSummary(id: Long, summary: TripSummary) {
         try {
@@ -107,9 +155,13 @@ class Store(context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(con
         } catch (e: JSONException) { throw IllegalStateException("Summary serialization", e) }
     }
     fun trips(): Cursor = readableDatabase.rawQuery("SELECT id,start,end,demo,status FROM trips ORDER BY start DESC,id DESC", null)
-    fun tripsBetween(from: Long, until: Long): Cursor = readableDatabase.rawQuery(
-        "SELECT id,start,end,demo,status FROM trips WHERE start>=? AND start<? ORDER BY start DESC,id DESC",
-        arrayOf(from.toString(), until.toString())
+    fun tripsBetween(from: Long, until: Long, vehicleId: String? = null): Cursor = readableDatabase.rawQuery(
+        """SELECT trips.id,start,end,demo,status,name FROM trips JOIN vehicles ON vehicles.id=trips.vehicle_id
+            WHERE start>=? AND start<? ${if (vehicleId == null) "" else "AND vehicle_id=?"} ORDER BY start DESC,trips.id DESC""",
+        listOfNotNull(from.toString(), until.toString(), vehicleId).toTypedArray()
     )
+    internal fun tripVehicle(id: Long): String = readableDatabase.rawQuery(
+        "SELECT name FROM trips JOIN vehicles ON vehicles.id=trips.vehicle_id WHERE trips.id=?", arrayOf(id.toString())
+    ).use { check(it.moveToFirst()); it.getString(0) }
     fun isDemo(id: Long): Boolean = readableDatabase.rawQuery("SELECT demo FROM trips WHERE id=?", arrayOf(id.toString())).use { it.moveToFirst() && it.getInt(0) == 1 }
 }

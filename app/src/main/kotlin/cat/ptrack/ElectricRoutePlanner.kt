@@ -15,11 +15,14 @@ internal object ElectricRoutePlanner {
         }
     }
 
-    data class Stop(val point: Point, val name: String, val powerKw: Double)
-    data class Leg(val minutes: Double, val kwh: Double, val estimatedKm: Double)
-    data class Charge(val stop: Stop, val arrivalKwh: Double, val departureKwh: Double, val minutes: Double)
+    data class Stop(val point: Point, val name: String, val powerKw: Double, val id: String = point.toString())
+    data class Leg(val minutes: Double, val kwh: Double, val estimatedKm: Double,
+        val km: Double = 0.0, val shape: List<Point> = emptyList())
+    data class Charge(val stop: Stop, val arrivalKwh: Double, val departureKwh: Double, val minutes: Double,
+        val arrivalMinutes: Double = 0.0, val ambientC: Double? = null, val learned: Boolean = false)
+    data class ChargeConditions(val ambientC: Double?, val curve: Map<Int, Double>)
     data class Plan(val charges: List<Charge>, val driveMinutes: Double, val chargeMinutes: Double,
-        val arrivalKwh: Double, val estimatedKm: Double) {
+        val arrivalKwh: Double, val estimatedKm: Double, val legs: List<Leg> = emptyList()) {
         val totalMinutes get() = driveMinutes + chargeMinutes + charges.size * CONNECTION_MINUTES
     }
     enum class Priority { FASTEST, LEAST_CHARGING }
@@ -30,13 +33,15 @@ internal object ElectricRoutePlanner {
      */
     fun plan(
         origin: Point, destination: Point, stops: List<Stop>, capacity: Double,
-        startPercent: Double, reservePercent: Double, maxPowerKw: Double, priority: Priority,
+        startPercent: Double, reservePercent: Double, priority: Priority,
+        reserveAt: (Point) -> Double = { reservePercent },
+        conditions: (Stop, Double) -> ChargeConditions = { _, _ -> ChargeConditions(null, emptyMap()) },
+        weatherDepartureMs: Long? = null,
         leg: (Point, Point) -> Leg?
     ): Plan? {
-        val reserve = capacity * reservePercent / 100
         val points = listOf(origin) + stops.map { it.point } + destination
-        val states = List(points.size) { mutableMapOf<Int, Plan>() }
-        states[0][0] = Plan(emptyList(), 0.0, 0.0, capacity * startPercent / 100, 0.0)
+        val states = List(points.size) { mutableMapOf<Pair<Int, Long>, Plan>() }
+        states[0][0 to 0L] = Plan(emptyList(), 0.0, 0.0, capacity * startPercent / 100, 0.0)
         val ranking = when (priority) {
             Priority.FASTEST -> compareBy<Plan> { it.totalMinutes }.thenBy { it.chargeMinutes }
             Priority.LEAST_CHARGING -> compareBy<Plan> { it.chargeMinutes }.thenBy { it.totalMinutes }
@@ -45,36 +50,38 @@ internal object ElectricRoutePlanner {
             val departures = states[from].values.flatMap { current ->
                 if (from == 0) listOf(current) else {
                     val stop = stops[from - 1]
+                    val weather = conditions(stop, current.totalMinutes)
                     (5..100 step 5).mapNotNull { percent ->
                         val target = capacity * percent / 100
                         if (target <= current.arrivalKwh) return@mapNotNull null
-                        val minutes = chargeMinutes(current.arrivalKwh, target, capacity, min(maxPowerKw, stop.powerKw))
-                        current.copy(charges = current.charges + Charge(stop, current.arrivalKwh, target, minutes),
-                            chargeMinutes = current.chargeMinutes + minutes, arrivalKwh = target)
+                        val estimate = DcChargeProfile.duration(current.arrivalKwh, target, capacity, stop.powerKw, weather.curve)
+                        val charge = Charge(stop, current.arrivalKwh, target, estimate.minutes, current.totalMinutes,
+                            weather.ambientC, estimate.learned)
+                        current.copy(charges = current.charges + charge,
+                            chargeMinutes = current.chargeMinutes + estimate.minutes, arrivalKwh = target)
                     }
                 }
             }
             if (departures.isEmpty()) continue
             for (to in from + 1..points.lastIndex) {
                 val segment = leg(points[from], points[to]) ?: continue
+                val reserve = capacity * reserveAt(points[to]) / 100
                 for (departure in departures) {
                     val arrival = departure.arrivalKwh - segment.kwh
                     if (arrival < reserve) continue
                     val option = departure.copy(driveMinutes = departure.driveMinutes + segment.minutes,
-                        arrivalKwh = arrival, estimatedKm = departure.estimatedKm + segment.estimatedKm)
-                    val bucket = floor(arrival / capacity * 100).toInt()
+                        arrivalKwh = arrival, estimatedKm = departure.estimatedKm + segment.estimatedKm,
+                        legs = departure.legs + segment)
+                    // Arrivals at the same SOC can see different charging conditions in different hours.
+                    val hour = if (to == points.lastIndex || weatherDepartureMs == null) 0L
+                        else Math.floorDiv(weatherDepartureMs + (option.totalMinutes * 60_000).toLong(), 3_600_000)
+                    val bucket = floor(arrival / capacity * 100).toInt() to hour
                     val previous = states[to][bucket]
                     if (previous == null || ranking.compare(option, previous) < 0) states[to][bucket] = option
                 }
             }
         }
         return states.last().values.minWithOrNull(ranking)
-    }
-
-    private fun chargeMinutes(start: Double, target: Double, capacity: Double, power: Double): Double {
-        val fastKwh = (min(target, capacity * .8) - start).coerceAtLeast(0.0)
-        val slowKwh = target - start - fastKwh
-        return 60 * (fastKwh / power + slowKwh / (power * .4))
     }
 
     private const val CONNECTION_MINUTES = 4

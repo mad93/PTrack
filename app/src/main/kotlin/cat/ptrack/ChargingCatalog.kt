@@ -29,17 +29,17 @@ internal class ChargingCatalog(context: Context, name: String = "charging.db") :
 
     fun fastChargers(minLat: Double, maxLat: Double, minLon: Double, maxLon: Double, minimumKw: Double): List<ElectricRoutePlanner.Stop> =
         readableDatabase.rawQuery(
-            """SELECT sites.lat, sites.lon, COALESCE(sites.name, sites.id), MAX(connectors.power_kw)
+            """SELECT sites.lat, sites.lon, COALESCE(sites.name, sites.id), MAX(connectors.power_kw), sites.id
                FROM sites JOIN connectors ON connectors.site_id = sites.id
                WHERE sites.lat BETWEEN ? AND ? AND sites.lon BETWEEN ? AND ?
-                 AND connectors.type = 'iec62196T2COMBO' AND connectors.power_kw >= ?
+                 AND connectors.type = 'iec62196T2COMBO' AND connectors.power_kw > 0 AND connectors.power_kw >= ?
                GROUP BY sites.id""",
             arrayOf(minLat, maxLat, minLon, maxLon, minimumKw).map(Double::toString).toTypedArray()
         ).use { cursor ->
             buildList {
                 while (cursor.moveToNext()) add(ElectricRoutePlanner.Stop(
                     ElectricRoutePlanner.Point(cursor.getDouble(0), cursor.getDouble(1)),
-                    cursor.getString(2), cursor.getDouble(3)))
+                    cursor.getString(2), cursor.getDouble(3), cursor.getString(4)))
             }
         }
 

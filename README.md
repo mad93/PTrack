@@ -13,7 +13,7 @@ Migració completa del codi propi i les proves a Kotlin, amb configuració Gradl
 - Lectures UDS `0x22` sobre CAN de diagnòstic, amb adreces del perfil e-CMP. No s’envien serveis d’escriptura, d’esborrat de fallades ni d’exploració d’adreces.
 - Registre automàtic quan arriben les quatre lectures bàsiques vàlides. Una connexió Bluetooth sola no genera un viatge buit.
 - Servei en primer pla amb notificació i bloqueig parcial de CPU renovable mentre hi ha dades, per registrar amb la pantalla apagada.
-- Associació opcional amb Companion Device Manager. A Android 12 o superior, detecció de presència de l’OBD per activar el servei en segon pla després de configurar-la.
+- Inici automàtic amb la connexió Bluetooth de l’OBD o, a Android 12 o superior, amb el Bluetooth del cotxe associat a PTrack. Si cal, el mode d’espera permet fer reintents amb la pantalla apagada durant 30 minuts. [Configuració i prova al Peugeot](docs/ANDROID-AUTO-VEHICLE.md#prova-de-linici-autom%C3%A0tic-obd).
 - Base de dades SQLite local amb viatges, mostres i respostes originals. Un procés interromput conserva les dades ja desades.
 - Historial, resum de cada viatge i exportació del registre complet a JSON.
 - PDF automàtic al final del viatge, recuperable i exportable des de l’historial. Dues pàgines: resum, SOC, potència, corrent, velocitat i altitud. Les gràfiques utilitzen tota l’amplada disponible i l’eix temporal correspon a la durada del viatge; els pics es preserven amb mínims i màxims per columna.
@@ -25,7 +25,7 @@ Migració completa del codi propi i les proves a Kotlin, amb configuració Gradl
 2. Aparella l’ELM327 des dels ajustos Bluetooth d’Android. Aquesta versió no admet ELM327 BLE, Wi-Fi ni USB. «ELM327» no identifica el transport: cal comprovar que el teu adaptador ofereix Bluetooth clàssic.
 3. Obre PTrack, prem **Connecta OBD** i concedeix el permís Bluetooth. Ubicació precisa i notificacions són recomanables, però la telemetria OBD no depèn del GPS.
 4. Selecciona l’adaptador. Amb el vehicle despert, l’app començarà el registre quan obtingui corrent, tensió, SOC i velocitat vàlids.
-5. A **Configuració → Associa l’OBD per a l’inici automàtic**, accepta l’associació que presenta Android. Mantén activat el registre automàtic. Aquesta configuració és necessària per a l’arrencada per presència amb l’app tancada a Android 12+; aparellar als ajustos Bluetooth no és equivalent a associar l’app.
+5. A Android 12 o superior, ves a **Configuració → Associa l’OBD per a l’inici automàtic** i accepta l’associació. Si l’ELM327 espera que PTrack s’hi connecti, associa també el Bluetooth del cotxe. Mantén activat **Registre automàtic en connectar**.
 6. Una interrupció de menys de 45 s manté el viatge obert; després es tanca i genera el PDF. **Atura i desa el viatge** també el tanca i desactiva l’arrencada automàtica fins que la tornis a activar.
 7. A **Viatges**, consulta el resum o exporta PDF/JSON amb el selector de fitxers d’Android.
 

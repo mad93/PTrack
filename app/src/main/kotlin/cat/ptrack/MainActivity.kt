@@ -49,37 +49,66 @@ class MainActivity : Activity() {
     private var backupDate: TextView? = null
     private var chargingStatus: TextView? = null
     private var chargingRefresh: Button? = null
-    private var planning = false
+    private var plannerScreen: PlannerScreen? = null
+    private var started = false
+    private var resumed = false
     private var importingMap = false
     private var calendarMonth = YearMonth.now()
     private var annualCalendar = false
     private var selectedDay: LocalDate? = null
     private var openedTrip: Long? = null
+    private var allVehicles = false
+    private var vehicleTitle: TextView? = null
+    private lateinit var shownVehicleId: String
+    private var choosingObdProfile = false
     private var page = 0
+    private var pendingAssociation: String? = null
     private val prefs get() = getSharedPreferences("settings", 0)
     private val syncListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (key == BackupSync.LAST_BACKUP && page == 2) backupDate?.text = lastBackupText()
         if (key == BackupSync.HISTORY_CHANGED && page == 1 && openedTrip == null) showPage()
+        if (key == BackupSync.HISTORY_CHANGED && page == 2) showPage()
     }
     private val chargingListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
         if (page == 2 && key == ChargingSync.REVISION) showChargingStatus()
     }
     private val refresh = object : Runnable {
-        override fun run() { if (page == 0) update(); handler.postDelayed(this, 750) }
+        override fun run() {
+            val vehicle = store.vehicles.active()
+            plannerScreen?.vehicleChanged(vehicle)
+            if (vehicle.id != shownVehicleId) {
+                if (!RecordingService.running && VehicleTelemetry.LIVE.snapshot().vehicleId != vehicle.id) {
+                    VehicleTelemetry.LIVE.resetVehicle(vehicle.id)
+                    RecordingService.state = if (vehicle.obdAddress == null) "unconfigured" else "disconnected"
+                }
+                if (page == 2 || (page == 1 && openedTrip == null)) showPage()
+            }
+            shownVehicleId = vehicle.id
+            if (page == 0) update(vehicle)
+            offerObdChoice()
+            handler.postDelayed(this, 750)
+        }
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); store = Store(this)
+        shownVehicleId = store.vehicles.active().id
         if (state != null) {
             exportId = state.getLong("exportId", -1); exportType = state.getString("exportType"); page = state.getInt("page", 0)
             calendarMonth = state.getString("calendarMonth")?.let(YearMonth::parse) ?: calendarMonth
             annualCalendar = state.getBoolean("annualCalendar")
+            allVehicles = state.getBoolean("allVehicles")
             selectedDay = state.getString("selectedDay")?.let(LocalDate::parse)
             openedTrip = state.getLong("openedTrip", -1).takeIf { it >= 0 }
+            pendingAssociation = state.getString("pendingAssociation")
         }
+        receiveObdChoice(intent)
         l = Labels(this); build()
+        if (prefs.getBoolean("auto", false)) observeAutomaticDevices(true)
     }
     override fun onStart() {
         super.onStart()
+        started = true
+        plannerScreen?.mapView?.onStart()
         BackupSync.prefs(this).registerOnSharedPreferenceChangeListener(syncListener)
         ChargingSync.prefs(this).registerOnSharedPreferenceChangeListener(chargingListener)
         if (page == 2) showChargingStatus()
@@ -89,29 +118,49 @@ class MainActivity : Activity() {
     override fun onStop() {
         BackupSync.prefs(this).unregisterOnSharedPreferenceChangeListener(syncListener)
         ChargingSync.prefs(this).unregisterOnSharedPreferenceChangeListener(chargingListener)
+        plannerScreen?.mapView?.onStop()
+        started = false
         super.onStop()
     }
     override fun onResume() {
         super.onResume(); handler.post(refresh)
+        resumed = true
+        plannerScreen?.mapView?.onResume()
         BackupSync.schedule(this)
         ChargingSync.schedule(this)
         if (backupBusy) return
         if (RecordingService.running) startService(Intent(this, RecordingService::class.java).setAction("gps"))
-        else if (prefs.getString("address", "").isNullOrEmpty()) RecordingService.state = "unconfigured"
-        else if (prefs.getBoolean("auto", false) && (Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED)) {
-            try { startForegroundService(Intent(this, RecordingService::class.java)) } catch (_: RuntimeException) { RecordingService.state = "permission" }
+        else if (activeAddress() == null) RecordingService.state = "unconfigured"
+        else if (Build.VERSION.SDK_INT < 31 && prefs.getBoolean("auto", false) && RecordingService.pendingObdChoice == null) {
+            try {
+                startForegroundService(Intent(this, RecordingService::class.java).setAction(RecordingService.ACTION_AUTO_OBD))
+            } catch (_: RuntimeException) {
+                RecordingService.state = "permission"
+            }
         }
     }
     override fun onSaveInstanceState(state: Bundle) {
         state.putLong("exportId", exportId); state.putString("exportType", exportType); state.putInt("page", page)
         state.putString("calendarMonth", calendarMonth.toString())
         state.putBoolean("annualCalendar", annualCalendar)
+        state.putBoolean("allVehicles", allVehicles)
         state.putString("selectedDay", selectedDay?.toString())
         openedTrip?.let { state.putLong("openedTrip", it) }
+        state.putString("pendingAssociation", pendingAssociation)
         super.onSaveInstanceState(state)
     }
-    override fun onPause() { handler.removeCallbacks(refresh); super.onPause() }
-    override fun onDestroy() { io.shutdown(); super.onDestroy() }
+    override fun onPause() {
+        resumed = false
+        plannerScreen?.mapView?.onPause()
+        handler.removeCallbacks(refresh)
+        super.onPause()
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        plannerScreen?.mapView?.onLowMemory()
+    }
+    override fun onDestroy() { plannerScreen?.close(); io.shutdown(); super.onDestroy() }
     private fun dp(n: Int) = (n * resources.displayMetrics.density).toInt()
     private fun text(value: String, size: Int, color: Int) = TextView(this).apply {
         text = value; textSize = size.toFloat(); setTextColor(color); setPadding(dp(8), dp(8), dp(8), dp(8))
@@ -164,6 +213,7 @@ class MainActivity : Activity() {
         body.removeAllViews()
         chargingStatus = null
         chargingRefresh = null
+        vehicleTitle = null
         when (page) {
             0 -> live()
             1 -> openedTrip?.let(::trip) ?: history()
@@ -175,21 +225,23 @@ class MainActivity : Activity() {
         val plans = NavigationPlanStore(this)
         val plan = plans.read()
         val point = plan?.next
-        val mapInstalled = OfflineValhalla.installed(this)
-        val mapStatus = if (mapInstalled) l.t("Mapa local disponible", "Mapa local disponible", "Local map available")
-            else l.t("Importa un paquet ZIP de Valhalla per calcular rutes sense connexió.",
-                "Importa un paquete ZIP de Valhalla para calcular rutas sin conexión.",
-                "Import a Valhalla ZIP package to calculate routes offline.")
-        body.addView(text(mapStatus, 15, Color.WHITE))
-        body.addView(button(if (importingMap) l.t("Important el mapa…", "Importando el mapa…", "Importing map…")
-            else l.t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import a routing map")) {
+        val screen = plannerScreen ?: PlannerScreen(this, l, importMap = {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("*/*"), OFFLINE_MAP_IMPORT)
-        }.apply { isEnabled = !importingMap && !planning })
-        body.addView(button(if (planning) l.t("Calculant la ruta…", "Calculando la ruta…", "Calculating route…")
-            else l.t("Calcula una ruta elèctrica", "Calcula una ruta eléctrica", "Calculate an EV route")) {
-            electricRouteForm(plans)
-        }.apply { isEnabled = mapInstalled && !importingMap && !planning })
+        }, locate = ::locatePlannerOrigin) { draft, maps ->
+            val saved = plans.read()
+            val itinerary = saved?.takeIf { it.points == draft.points && it.next != null } ?: draft
+            plans.save(itinerary)
+            showPage()
+            itinerary.next?.let { openNextNavigation(it, maps) }
+        }.also {
+            plannerScreen = it
+            if (started) it.mapView.onStart()
+            if (resumed) it.mapView.onResume()
+        }
+        body.addView(screen.view)
+        screen.vehicleChanged(store.vehicles.active())
+        screen.mapStatus(OfflineValhalla.installed(this), importingMap)
         body.addView(text(l.t("Navegació per trams", "Navegación por tramos", "Leg-by-leg navigation"), 20, Color.WHITE))
         if (plan == null || point == null) {
             val message = if (plan == null) l.t("Afegeix les parades i el destí del viatge.",
@@ -203,12 +255,10 @@ class MainActivity : Activity() {
             else l.t("Pròxima parada", "Próxima parada", "Next stop")
         body.addView(text("$heading · ${plan.completed + 1}/${plan.points.size}\n$point", 18, Color.WHITE))
         body.addView(button(l.t("Obre amb Waze", "Abrir con Waze", "Open in Waze")) {
-            val url = TripNavigation.waze(point)
-            openNavigation("com.waze", url, url)
+            openNextNavigation(point, maps = false)
         })
         body.addView(button(l.t("Obre amb Google Maps", "Abrir con Google Maps", "Open in Google Maps")) {
-            openNavigation("com.google.android.apps.maps", TripNavigation.mapsNavigation(point),
-                TripNavigation.mapsDirections(listOf(point), browser = true))
+            openNextNavigation(point, maps = true)
         })
         val route = TripNavigation.mapsDirections(plan.remaining, browser = false)
         if (plan.remaining.size > 1 && route != null) {
@@ -253,128 +303,48 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun electricRouteForm(plans: NavigationPlanStore) {
-        val form = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(18), 0, dp(18), 0) }
-        fun field(label: String, value: String = ""): EditText {
-            form.addView(text(label, 14, Color.WHITE))
-            return EditText(this).apply {
-                setSingleLine()
-                setText(value)
-                contentDescription = label
-                form.addView(this)
-            }
+    private fun locatePlannerOrigin() {
+        val fine = Manifest.permission.ACCESS_FINE_LOCATION
+        val coarse = Manifest.permission.ACCESS_COARSE_LOCATION
+        if (checkSelfPermission(fine) != PackageManager.PERMISSION_GRANTED &&
+            checkSelfPermission(coarse) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(fine, coarse), PLANNER_LOCATION_PERMISSION)
+            return
         }
-        val origin = field(l.t("Origen (latitud,longitud)", "Origen (latitud,longitud)", "Origin (latitude,longitude)"))
-        val destination = field(l.t("Destí (latitud,longitud)", "Destino (latitud,longitud)", "Destination (latitude,longitude)"))
-        val vehicle = VehicleTelemetry.LIVE.snapshot()
-        val liveSoc = if (vehicle.simulation) null else vehicle.current(SystemClock.elapsedRealtime())?.soc
-        val start = field(l.t("Bateria inicial (%)", "Batería inicial (%)", "Starting battery (%)"),
-            liveSoc?.takeIf { it in 0.0..100.0 }?.toString().orEmpty())
-        val capacity = field(l.t("Capacitat útil (kWh)", "Capacidad útil (kWh)", "Usable capacity (kWh)"),
-            prefs.getString("planner_capacity", "").orEmpty())
-        val reserve = field(l.t("Reserva mínima (%)", "Reserva mínima (%)", "Minimum reserve (%)"), "10")
-        val fallback = field(l.t("Consum de referència (kWh/100 km)", "Consumo de referencia (kWh/100 km)", "Fallback consumption (kWh/100 km)"),
-            prefs.getString("planner_consumption", "").orEmpty())
-        val minimum = field(l.t("Potència mínima del punt CCS (kW)", "Potencia mínima del punto CCS (kW)", "Minimum CCS charger power (kW)"), "50")
-        val power = field(l.t("Potència màxima DC del cotxe (kW)", "Potencia máxima DC del coche (kW)", "Vehicle maximum DC power (kW)"),
-            prefs.getString("planner_power", "").orEmpty())
-        val modes = Spinner(this).apply {
-            adapter = ArrayAdapter(this@MainActivity, android.R.layout.simple_spinner_dropdown_item, listOf(
-                l.t("Arribar abans", "Llegar antes", "Arrive sooner"),
-                l.t("Carregar menys temps", "Cargar menos tiempo", "Spend less time charging")))
+        val manager = getSystemService(android.location.LocationManager::class.java)
+        val providers = manager.getProviders(true)
+        val last = providers.mapNotNull { runCatching { manager.getLastKnownLocation(it) }.getOrNull() }
+            .maxByOrNull { it.elapsedRealtimeNanos }
+        fun show(location: android.location.Location?) {
+            if (isDestroyed || page != 3) return
+            val place = location?.let {
+                PlannerPlaces.Place(l.t("La meva ubicació", "Mi ubicación", "My location"),
+                    ElectricRoutePlanner.Point(it.latitude, it.longitude))
+            }
+            plannerScreen?.location(place)
         }
-        form.addView(modes)
-        val dialog = AlertDialog.Builder(this).setTitle(l.t("Ruta elèctrica", "Ruta eléctrica", "EV route"))
-            .setView(ScrollView(this).apply { addView(form) }).setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(l.t("Calcula", "Calcula", "Calculate"), null).show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            fun point(input: EditText): ElectricRoutePlanner.Point {
-                val parts = input.text.toString().split(',')
-                require(parts.size == 2)
-                return ElectricRoutePlanner.Point(parts[0].trim().toDouble(), parts[1].trim().toDouble())
+        if (last != null && SystemClock.elapsedRealtimeNanos() - last.elapsedRealtimeNanos < 120_000_000_000L) {
+            show(last)
+        } else if (Build.VERSION.SDK_INT >= 30) {
+            val provider = listOf(android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.GPS_PROVIDER)
+                .firstOrNull { it in providers }
+            if (provider == null) show(null)
+            else try {
+                manager.getCurrentLocation(provider, null, mainExecutor, ::show)
+            } catch (_: SecurityException) {
+                show(null)
             }
-            fun number(input: EditText, range: ClosedFloatingPointRange<Double>): Double =
-                input.text.toString().trim().replace(',', '.').toDouble().also { require(it in range) }
-            val from: ElectricRoutePlanner.Point
-            val to: ElectricRoutePlanner.Point
-            val soc: Double
-            val kwh: Double
-            val floor: Double
-            val consumption: Double
-            val minKw: Double
-            val maxKw: Double
-            try {
-                from = point(origin); to = point(destination); require(from != to)
-                soc = number(start, 0.0..100.0); kwh = number(capacity, 1.0..500.0)
-                floor = number(reserve, 0.0..99.0); require(soc >= floor)
-                consumption = number(fallback, 1.0..100.0)
-                minKw = number(minimum, 0.0..1000.0); maxKw = number(power, 1.0..1000.0)
-            } catch (_: Exception) {
-                toast(l.t("Revisa les coordenades i els valors de bateria i càrrega.",
-                    "Revisa las coordenadas y los valores de batería y carga.",
-                    "Check the coordinates, battery and charging values."))
-                return@setOnClickListener
-            }
-            val priority = ElectricRoutePlanner.Priority.entries[modes.selectedItemPosition]
-            prefs.edit().putString("planner_capacity", kwh.toString())
-                .putString("planner_consumption", consumption.toString()).putString("planner_power", maxKw.toString()).apply()
-            dialog.dismiss()
-            planning = true
-            showPage()
-            io.execute {
-                val result = runCatching {
-                    Store(applicationContext).use { history ->
-                        ChargingCatalog(applicationContext).use { catalog ->
-                            val profile = ConsumptionRepository(history).planningProfile()
-                            OfflineValhalla.withEngine(applicationContext) { engine ->
-                                ValhallaPlanner(engine, catalog, profile, consumption)
-                                    .plan(from, to, kwh, soc, floor, minKw, maxKw, priority)
-                            }
-                        }
-                    }
-                }
-                runOnUiThread {
-                    planning = false
-                    if (isDestroyed || page != 3) return@runOnUiThread
-                    showPage()
-                    val route = result.getOrNull()
-                    if (route == null) {
-                        result.exceptionOrNull()?.let { Log.w("PTrackPlanner", "Could not calculate route", it) }
-                        val message = if (result.isFailure) l.t("Ha fallat el càlcul amb el mapa local.",
-                            "Falló el cálculo con el mapa local.", "Routing with the local map failed.")
-                        else l.t("Cap ruta viable. Revisa la cobertura del mapa, el catàleg i els filtres.",
-                            "Ninguna ruta viable. Revisa la cobertura del mapa, el catálogo y los filtros.",
-                            "No feasible route. Check map coverage, the charging catalog and filters.")
-                        Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-                    } else showElectricRoute(plans, route, to, kwh)
-                }
-            }
-        }
+        } else show(null)
     }
 
-    private fun showElectricRoute(plans: NavigationPlanStore, route: ElectricRoutePlanner.Plan,
-        destination: ElectricRoutePlanner.Point, capacity: Double) {
-        fun percent(kwh: Double) = l.n(kwh / capacity * 100, 0) + "%"
-        val summary = buildString {
-            append(l.t("Durada prevista", "Duración prevista", "Estimated duration"))
-            append(" · ${l.n(route.totalMinutes, 0)} min\n")
-            append(l.t("Bateria al destí", "Batería al llegar", "Battery at destination"))
-            append(" · ${percent(route.arrivalKwh)}\n")
-            append(l.t("Distància amb consum de referència", "Distancia con consumo de referencia", "Distance using fallback consumption"))
-            append(" · ${l.n(route.estimatedKm, 1)} km\n")
-            for (charge in route.charges) {
-                append("\n${charge.stop.name} · ${l.n(charge.stop.powerKw, 0)} kW\n")
-                append("${percent(charge.arrivalKwh)} → ${percent(charge.departureKwh)} · ${l.n(charge.minutes, 0)} min\n")
-            }
+    private fun openNextNavigation(point: String, maps: Boolean) {
+        if (maps) openNavigation("com.google.android.apps.maps", TripNavigation.mapsNavigation(point),
+            TripNavigation.mapsDirections(listOf(point), browser = true))
+        else {
+            val url = TripNavigation.waze(point)
+            openNavigation("com.waze", url, url)
         }
-        AlertDialog.Builder(this).setTitle(l.t("Itinerari estimat", "Itinerario estimado", "Estimated itinerary"))
-            .setMessage(summary).setNegativeButton(android.R.string.cancel, null)
-            .setPositiveButton(l.t("Activa l’itinerari", "Activa el itinerario", "Activate itinerary")) { _, _ ->
-                plans.save(NavigationPlan(route.charges.map { it.stop.point.toString() } + destination.toString()))
-                showPage()
-            }.show()
     }
-
     private fun editNavigationPlan(plans: NavigationPlanStore, plan: NavigationPlan?) {
         val input = EditText(this).apply {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
@@ -420,6 +390,7 @@ class MainActivity : Activity() {
     }
 
     private fun live() {
+        vehicleTitle = text("", 17, Color.WHITE).also(body::addView)
         status = text("", 15, 0xFFBCF46A.toInt()).also(body::addView)
         val gauges = LinearLayout(this)
         power = Gauge(this, l.t("Potència", "Potencia", "Power"), "kW", -80.0, 120.0)
@@ -429,15 +400,16 @@ class MainActivity : Activity() {
         body.addView(text(l.t("+ consum   /   − energia cap a la bateria", "+ consumo   /   − energía hacia la batería", "+ discharge   /   − energy into battery"), 12, 0xFF9DB5AA.toInt()).apply { gravity = Gravity.CENTER })
         body.addView(button(l.t("Connecta OBD", "Conectar OBD", "Connect OBD"), ::connect))
         body.addView(button(l.t("Atura i desa el viatge", "Detener y guardar viaje", "Stop and save trip")) {
-            prefs.edit().putBoolean("auto", false).apply()
+            setAutomaticRecording(false)
             if (RecordingService.running) startService(Intent(this, RecordingService::class.java).setAction("stop"))
         })
         body.addView(text(l.t("TELEMETRIA DEL VEHICLE", "TELEMETRÍA DEL VEHÍCULO", "VEHICLE TELEMETRY"), 12, 0xFFBCF46A.toInt()))
         advanced = text("", 14, 0xFFDBE8E0.toInt()); body.addView(advanced); update()
     }
-    private fun update() {
+    private fun update(vehicle: VehicleProfile = store.vehicles.active()) {
         val statusView = status ?: return
         if (!::power.isInitialized) return
+        vehicleTitle?.text = vehicle.label
         var key = RecordingService.state; var s = RecordingService.latest
         if (s != null && System.currentTimeMillis() - s.time > 10000) { s = null; key = "vehicle" }
         statusView.text = l.status(key); power.value(s?.power()); current.value(s?.current); charge.text = if (s == null) "— %" else l.n(s.soc, 1) + " %"
@@ -447,6 +419,12 @@ class MainActivity : Activity() {
             detail.append(l.signal("voltage")).append("     ").append(l.n(s.voltage, 1)).append(" V\n")
         }
         RecordingService.advanced.toSortedMap().forEach { (key, value) -> detail.append(l.signal(key)).append("     ").append(value).append('\n') }
+        val lastSoh = vehicle.soh
+        if (lastSoh != null && !RecordingService.advanced.containsKey("soh")) {
+            val date = DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT, l.locale).format(Date(vehicle.sohAt))
+            detail.append(l.t("Darrer SOH", "Último SOH", "Last SOH")).append("     ")
+                .append(l.n(lastSoh, 1)).append(" % · ").append(date).append('\n')
+        }
         if (detail.isEmpty()) detail.append(l.t("Les dades apareixeran quan el vehicle respongui.", "Los datos aparecerán cuando responda el vehículo.", "Data appears when the vehicle responds."))
         advanced.text = detail.toString()
     }
@@ -461,28 +439,41 @@ class MainActivity : Activity() {
     private fun connect() {
         if (RecordingService.running) { toast(l.t("El servei ja està actiu", "El servicio ya está activo", "Service is already active")); return }
         if (!permissions()) return
-        if (prefs.getString("address", "").isNullOrEmpty()) { chooseAdapter(); return }
+        if (activeAddress() == null) { chooseAdapter(); return }
         start(false)
     }
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, results: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, results)
+        if (requestCode == PLANNER_LOCATION_PERMISSION) {
+            if (page == 3 && results.any { it == PackageManager.PERMISSION_GRANTED }) locatePlannerOrigin()
+            else plannerScreen?.location(null)
+            return
+        }
         if (requestCode == OBD_SETTINGS_PERMISSION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
             if (page == 2) chooseAdapter(startRecording = false)
+        } else if (requestCode == OBD_CAR_PERMISSION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            chooseCarTrigger()
+        } else if (requestCode == OBD_WAIT_NOTIFICATION && results.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
+            armObd()
         } else if (requestCode == 30) {
             if (Build.VERSION.SDK_INT < 31 || checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED) {
-                if (prefs.getString("address", "").isNullOrEmpty()) chooseAdapter() else start(false)
+                if (activeAddress() == null) chooseAdapter() else start(false)
             } else toast(l.status("permission"))
         }
     }
-    private fun start(demo: Boolean) {
+    private fun start(demo: Boolean, address: String? = null) {
         if (RecordingService.running) return
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) { permissions(); return }
-        prefs.edit().putBoolean("auto", !demo).apply()
-        try { startForegroundService(Intent(this, RecordingService::class.java).putExtra("demo", demo)); page = 0; showPage() }
+        try {
+            val request = Intent(this, RecordingService::class.java).putExtra("demo", demo)
+            if (address != null) request.putExtra(RecordingService.EXTRA_OBD, address)
+            startForegroundService(request); page = 0; showPage()
+        }
         catch (_: RuntimeException) { toast(l.status("permission")) }
     }
     private fun chooseAdapter(startRecording: Boolean = true) {
         if (RecordingService.running) { stopBeforeAdapterChange(); return }
+        val target = store.vehicles.active().id
         if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
             if (startRecording) permissions()
             else requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), OBD_SETTINGS_PERMISSION)
@@ -501,40 +492,189 @@ class MainActivity : Activity() {
         AlertDialog.Builder(this).setTitle(l.t("Tria l’ELM327 Bluetooth clàssic", "Elige el ELM327 Bluetooth clásico", "Select classic Bluetooth ELM327"))
             .setItems(names) { _, which ->
                 if (RecordingService.running) { stopBeforeAdapterChange(); return@setItems }
+                if (store.vehicles.active().id != target) return@setItems
                 val device = devices[which]
                 prefs.edit().putStringSet("obd_saved", rememberedAdapters() + device.address)
                     .putString("obd_name_${device.address}", device.name)
-                    .putString("address", device.address).apply()
-                if (startRecording) start(false) else showPage()
+                    .apply()
+                if (!startRecording) bindAdapter(device.address)
+                else if (store.vehicles.matches(device.address).isNotEmpty()) start(false, device.address)
+                else AlertDialog.Builder(this)
+                    .setTitle(l.t("OBD sense perfil vinculat", "OBD sin perfil vinculado", "OBD without a linked profile"))
+                    .setItems(arrayOf(l.t("Connecta només ara", "Conecta solo ahora", "Connect this time"),
+                        l.t("Vincula al perfil actiu i connecta", "Vincula al perfil activo y conecta", "Link to active profile and connect"))) unbound@{ _, option ->
+                        if (RecordingService.running) { stopBeforeAdapterChange(); return@unbound }
+                        if (store.vehicles.active().id != target) return@unbound
+                        if (option == 1) bindAdapter(device.address)
+                        start(false, device.address)
+                    }.setNegativeButton(android.R.string.cancel, null).show()
             }.show()
     }
     private fun rememberedAdapters(): Set<String> {
         val stored = prefs.getStringSet("obd_saved", emptySet()).orEmpty()
-        val active = prefs.getString("address", null)
-        return if (active.isNullOrEmpty()) stored else stored + active
+        return stored + store.vehicles.addresses()
     }
+    private fun activeAddress() = store.vehicles.active().obdAddress
     private fun adapterName(address: String) = prefs.getString("obd_name_$address", null) ?: address
-    private fun stopBeforeAdapterChange() = toast(l.t("Atura abans el registre", "Detén antes el registro", "Stop recording first"))
-    private fun manageAdapters(forget: Boolean) {
+    private fun stopBeforeAdapterChange() {
+        AlertDialog.Builder(this).setMessage(l.t("Atura i desa el registre abans de canviar el perfil o l’OBD.",
+            "Detén y guarda el registro antes de cambiar el perfil o el OBD.",
+            "Stop and save recording before changing the profile or OBD."))
+            .setPositiveButton(l.t("Atura i desa", "Detén y guarda", "Stop and save")) { _, _ ->
+                if (RecordingService.running) startService(Intent(this, RecordingService::class.java).setAction("stop"))
+            }.setNegativeButton(android.R.string.cancel, null).show()
+    }
+    private fun chooseRememberedAdapter() {
         if (RecordingService.running) { stopBeforeAdapterChange(); return }
+        val target = store.vehicles.active().id
         val addresses = rememberedAdapters().sortedBy(::adapterName)
         if (addresses.isEmpty()) return
-        val title = if (forget) l.t("Oblida un adaptador OBD", "Olvidar un adaptador OBD", "Forget an OBD adapter")
-            else l.t("Tria l’adaptador actiu", "Elige el adaptador activo", "Choose active adapter")
+        val title = l.t("Vincula un OBD recordat", "Vincula un OBD recordado", "Link a saved OBD adapter")
         AlertDialog.Builder(this).setTitle(title)
             .setItems(addresses.map { "${adapterName(it)}\n$it" }.toTypedArray()) { _, which ->
                 if (RecordingService.running) { stopBeforeAdapterChange(); return@setItems }
-                val address = addresses[which]
-                val edit = prefs.edit()
-                if (forget) {
-                    edit.putStringSet("obd_saved", rememberedAdapters() - address).remove("obd_name_$address")
-                    if (prefs.getString("address", null) == address) edit.remove("address").putBoolean("auto", false)
-                } else edit.putStringSet("obd_saved", rememberedAdapters()).putString("address", address)
-                edit.apply()
-                showPage()
+                if (store.vehicles.active().id == target) bindAdapter(addresses[which])
             }.show()
     }
+
+    private fun bindAdapter(address: String?) {
+        val vehicle = store.vehicles.active()
+        saveVehicle(vehicle.copy(obdAddress = address))
+    }
+
+    private fun saveVehicle(vehicle: VehicleProfile) {
+        val before = store.vehicles.addresses()
+        store.vehicles.save(vehicle)
+        ObdAutoStart.updateObservations(this, before, store.vehicles.addresses())
+        BackupSync.schedule(this)
+        showPage()
+    }
+
+    private fun selectVehicle(vehicle: VehicleProfile): Boolean {
+        if (RecordingService.running) { stopBeforeAdapterChange(); return false }
+        if (!store.vehicles.select(vehicle.id)) return false
+        VehicleTelemetry.LIVE.resetVehicle(vehicle.id)
+        RecordingService.state = if (vehicle.obdAddress == null) "unconfigured" else "disconnected"
+        shownVehicleId = vehicle.id
+        plannerScreen?.vehicleChanged(vehicle)
+        showPage()
+        return true
+    }
+
+    private fun receiveObdChoice(intent: Intent) {
+        intent.getStringExtra(RecordingService.EXTRA_OBD)?.takeIf(VehicleProfiles::validAddress)?.let {
+            RecordingService.pendingObdChoice = it
+        }
+        intent.removeExtra(RecordingService.EXTRA_OBD)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        receiveObdChoice(intent)
+    }
+
+    private fun offerObdChoice() {
+        if (RecordingService.running || backupBusy || choosingObdProfile || isFinishing) return
+        val address = RecordingService.pendingObdChoice ?: return
+        val vehicles = store.vehicles.matches(address)
+        if (vehicles.isEmpty()) { clearObdChoice(); return }
+        choosingObdProfile = true
+        AlertDialog.Builder(this).setTitle(l.t("Tria el vehicle per a l’OBD compartit", "Elige el vehículo para el OBD compartido",
+            "Choose a vehicle for the shared OBD"))
+            .setItems(vehicles.map { it.label }.toTypedArray()) { _, index ->
+                clearObdChoice()
+                if (selectVehicle(vehicles[index])) start(false, address)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> clearObdChoice() }
+            .setOnCancelListener { clearObdChoice() }
+            .show().setOnDismissListener { choosingObdProfile = false }
+    }
+    private fun clearObdChoice() {
+        RecordingService.pendingObdChoice = null
+        getSystemService(NotificationManager::class.java).cancel(RecordingService.CHOOSE_VEHICLE_NOTIFICATION)
+    }
+
+    private fun vehicleSettings() {
+        val active = store.vehicles.active()
+        body.addView(text(l.t("Perfils de vehicle", "Perfiles de vehículo", "Vehicle profiles"), 20, Color.WHITE))
+        body.addView(text(l.t("Vehicle actiu · ${active.label}", "Vehículo activo · ${active.label}", "Active vehicle · ${active.label}"),
+            17, Color.WHITE))
+        body.addView(button(l.t("Tria el vehicle", "Elige el vehículo", "Choose vehicle")) {
+            val profiles = store.vehicles.list().filterNot { it.archived }
+            AlertDialog.Builder(this).setTitle(l.t("Tria el vehicle", "Elige el vehículo", "Choose vehicle"))
+                .setSingleChoiceItems(profiles.map { it.label }.toTypedArray(), profiles.indexOfFirst { it.id == active.id }) { dialog, index ->
+                    dialog.dismiss()
+                    if (profiles[index].id != active.id) selectVehicle(profiles[index])
+                }.setNegativeButton(android.R.string.cancel, null).show()
+        })
+        body.addView(button(l.t("Afegeix un perfil", "Añade un perfil", "Add a profile")) { editVehicle(null) })
+        body.addView(button(l.t("Edita un perfil", "Edita un perfil", "Edit a profile")) {
+            val profiles = store.vehicles.list()
+            AlertDialog.Builder(this).setTitle(l.t("Edita un perfil", "Edita un perfil", "Edit a profile"))
+                .setItems(profiles.map {
+                    it.label + if (it.archived) l.t(" · Arxivat", " · Archivado", " · Archived") else ""
+                }.toTypedArray()) { _, index -> editVehicle(profiles[index]) }
+                .setNegativeButton(android.R.string.cancel, null).show()
+        })
+    }
+
+    private fun editVehicle(vehicle: VehicleProfile?) {
+        if (RecordingService.running) { stopBeforeAdapterChange(); return }
+        val fields = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), 0, dp(20), 0)
+        }
+        fun field(hint: String, value: String?) = EditText(this).apply {
+            this.hint = hint
+            setSingleLine()
+            setText(value.orEmpty())
+            fields.addView(this)
+        }
+        val name = field(l.t("Nom del perfil", "Nombre del perfil", "Profile name"), vehicle?.name)
+        val model = field(l.t("Model (opcional)", "Modelo (opcional)", "Model (optional)"), vehicle?.model)
+        val capacity = field(l.t("Capacitat útil de referència (kWh)", "Capacidad útil de referencia (kWh)", "Reference usable capacity (kWh)"),
+            vehicle?.capacityKwh?.toString()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        val builder = AlertDialog.Builder(this).setTitle(l.t("Perfil de vehicle", "Perfil de vehículo", "Vehicle profile"))
+            .setView(fields).setNegativeButton(android.R.string.cancel, null)
+            .setPositiveButton(l.t("Desa", "Guardar", "Save"), null)
+        if (vehicle != null && vehicle.id != store.vehicles.active().id) {
+            builder.setNeutralButton(if (vehicle.archived) l.t("Recupera", "Recuperar", "Restore")
+                else l.t("Arxiva", "Archivar", "Archive")) { _, _ ->
+                if (RecordingService.running) stopBeforeAdapterChange()
+                else saveVehicle(vehicle.copy(archived = !vehicle.archived))
+            }
+        }
+        val dialog = builder.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+            if (RecordingService.running) { stopBeforeAdapterChange(); return@setOnClickListener }
+            val label = name.text.toString().trim()
+            val modelName = model.text.toString().trim().ifEmpty { null }
+            val enteredCapacity = capacity.text.toString().trim().replace(',', '.')
+            val kwh = enteredCapacity.toDoubleOrNull()
+            if (label.isEmpty() || label.length > 80) {
+                name.error = l.t("Escriu un nom d’1 a 80 caràcters", "Escribe un nombre de 1 a 80 caracteres", "Enter a name of 1–80 characters")
+                return@setOnClickListener
+            }
+            if (modelName != null && modelName.length > 80) {
+                model.error = l.t("Màxim 80 caràcters", "Máximo 80 caracteres", "Maximum 80 characters")
+                return@setOnClickListener
+            }
+            if (enteredCapacity.isNotEmpty() && (kwh == null || !kwh.isFinite() || kwh <= 0)) {
+                capacity.error = l.t("Introdueix una capacitat positiva", "Introduce una capacidad positiva", "Enter a positive capacity")
+                return@setOnClickListener
+            }
+            val saved = vehicle?.copy(name = label, model = modelName, capacityKwh = kwh)
+                ?: VehicleProfile(VehicleProfiles.newId(), label, modelName, kwh, null)
+            saveVehicle(saved)
+            if (vehicle == null) selectVehicle(saved)
+            dialog.dismiss()
+        }
+    }
+
     private fun settings() {
+        vehicleSettings()
         body.addView(text(l.t("Idioma de l’aplicació i dels informes", "Idioma de la aplicación y de los informes", "App and report language"), 17, Color.WHITE))
         val codes = arrayOf("ca", "es", "en"); val names = arrayOf("Català", "Español", "English")
         val currentLanguage = codes.indexOf(l.locale.language).coerceAtLeast(0)
@@ -547,6 +687,12 @@ class MainActivity : Activity() {
                 override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                     if (position != currentLanguage) {
                         prefs.edit().putString("lang", codes[position]).apply()
+                        plannerScreen?.let { screen ->
+                            if (resumed) screen.mapView.onPause()
+                            if (started) screen.mapView.onStop()
+                            screen.close()
+                        }
+                        plannerScreen = null
                         build()
                     }
                 }
@@ -563,26 +709,46 @@ class MainActivity : Activity() {
                 "No se ha podido programar la actualización.", "Could not schedule the update.")
         }.also(body::addView)
         showChargingStatus()
-        val activeAdapter = prefs.getString("address", null)?.let(::adapterName)
+        val address = activeAddress()
+        val activeAdapter = address?.let { "${adapterName(it)} · $it" }
         val obdTitle = l.t("Adaptador OBD actiu", "Adaptador OBD activo", "Active OBD adapter")
         val obdValue = activeAdapter ?: l.t("Cap adaptador seleccionat", "Ningún adaptador seleccionado", "No adapter selected")
         body.addView(text("$obdTitle · $obdValue", 17, Color.WHITE))
         body.addView(button(l.t("Afegeix un OBD aparellat", "Añadir un OBD emparejado", "Add a paired OBD adapter")) { chooseAdapter(false) })
         if (rememberedAdapters().isNotEmpty()) {
-            body.addView(button(l.t("Tria un OBD recordat", "Elegir un OBD recordado", "Choose a saved OBD adapter")) { manageAdapters(false) })
-            body.addView(button(l.t("Oblida un OBD recordat", "Olvidar un OBD recordado", "Forget a saved OBD adapter")) { manageAdapters(true) })
+            body.addView(button(l.t("Vincula un OBD recordat", "Vincula un OBD recordado", "Link a saved OBD adapter"), ::chooseRememberedAdapter))
         }
+        if (address != null) body.addView(button(l.t("Desvincula l’OBD d’aquest perfil", "Desvincula el OBD de este perfil",
+            "Unlink OBD from this profile")) {
+            if (RecordingService.running) stopBeforeAdapterChange() else bindAdapter(null)
+        })
         body.addView(button(l.t("Prova amb dades simulades", "Probar con datos simulados", "Try simulated data")) { start(true) })
-        body.addView(button(l.t("Associa l’OBD per a l’inici automàtic", "Asociar OBD para inicio automático", "Associate OBD for automatic start"), ::associate))
         val automatic = Switch(this).apply {
             setTextColor(Color.WHITE); text = l.t("Registre automàtic en connectar", "Registro automático al conectar", "Record automatically on connection")
             isChecked = prefs.getBoolean("auto", false)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("auto", on).apply() }
+            setOnCheckedChangeListener { _, on -> setAutomaticRecording(on) }
         }
         body.addView(automatic)
-        body.addView(text(l.t("Connexió: ELM327 Bluetooth clàssic (SPP). Activa el servei una vegada des del mòbil. Es reconnecta mentre és actiu i quan Android anuncia una connexió Bluetooth de l’adaptador seleccionat. Aparellar no implica una connexió activa. Algunes marques limiten l’execució en segon pla. No hi ha inici després de reiniciar el mòbil.",
-            "Conexión: ELM327 Bluetooth clásico (SPP). Activa el servicio una vez desde el móvil. Se reconecta mientras está activo y cuando Android anuncia una conexión Bluetooth del adaptador elegido. Emparejar no implica conexión activa. Algunas marcas limitan la ejecución en segundo plano. No se inicia tras reiniciar el móvil.",
-            "Connection: classic Bluetooth ELM327 (SPP). Start the service once on the phone. It retries while active and responds when Android announces a connection from the selected adapter. Pairing does not mean an active connection. Some manufacturers restrict background execution. No startup after reboot."), 13, 0xFFB3C8BD.toInt()))
+        if (Build.VERSION.SDK_INT >= 31) {
+            body.addView(button(l.t("Associa l’OBD per a l’inici automàtic", "Asociar OBD para inicio automático", "Associate OBD for automatic start")) {
+                val address = activeAddress()
+                if (address == null) chooseAdapter(startRecording = false) else associate(address, false)
+            })
+            body.addView(button(l.t("Associa el Bluetooth del cotxe", "Asociar el Bluetooth del coche", "Associate the car’s Bluetooth"), ::chooseCarTrigger))
+            prefs.getString(ObdAutoStart.CAR_ADDRESS, null)?.let { address ->
+                val name = prefs.getString("auto_car_name", address)
+                body.addView(text(l.t("Disparador del cotxe · $name", "Disparador del coche · $name", "Car trigger · $name"), 15, Color.WHITE))
+                body.addView(button(l.t("Treu el disparador del cotxe", "Quitar el disparador del coche", "Remove car trigger")) {
+                    prefs.edit().remove(ObdAutoStart.CAR_ADDRESS).remove("auto_car_name").apply()
+                    if (address !in store.vehicles.addresses()) ObdAutoStart.observe(this, address, false)
+                    showPage()
+                })
+            }
+        }
+        body.addView(button(l.t("Espera l’OBD durant 30 minuts", "Esperar al OBD durante 30 minutos", "Wait for OBD for 30 minutes"), ::armObd))
+        body.addView(text(l.t("Amb el registre automàtic activat, una connexió Bluetooth de l’OBD o del cotxe pot iniciar el registre. Si l’ELM327 espera que el mòbil s’hi connecti i el cotxe no dona cap senyal, activa l’espera abans de sortir. L’espera manté una notificació i fa reintents amb la pantalla apagada.",
+            "Con el registro automático activado, una conexión Bluetooth del OBD o del coche puede iniciar el registro. Si el ELM327 espera a que se conecte el móvil y el coche no da ninguna señal, activa la espera antes de salir. La espera mantiene una notificación y reintenta con la pantalla apagada.",
+            "With automatic recording enabled, an OBD or car Bluetooth connection can start recording. If the ELM327 waits for the phone to connect and the car supplies no signal, turn on wait mode before leaving. It shows a notification and retries with the screen off."), 13, 0xFFB3C8BD.toInt()))
         body.addView(text(l.t("Android Auto: integració experimental provada al DHU. 'Fonts desconegudes' no habilita aquesta app al cotxe. La via oficial de prova al vehicle és instal·lar-la des de Google Play amb Compartició interna d'aplicacions o una prova interna. L'acceptació de PTrack al vehicle i de la seva categoria continua pendent.",
             "Android Auto: integración experimental probada en DHU. 'Fuentes desconocidas' no habilita esta app en el coche. La vía oficial de prueba en el vehículo es instalarla desde Google Play con Compartir aplicaciones de forma interna o una prueba interna. La aceptación de PTrack en el vehículo y de su categoría sigue pendiente.",
             "Android Auto: experimental integration tested with DHU. 'Unknown sources' does not enable this app in the car. The official vehicle testing route is installation through Google Play using Internal App Sharing or an internal test track. PTrack's acceptance in the vehicle and category eligibility remain unverified."), 13, 0xFFB3C8BD.toInt()))
@@ -652,6 +818,13 @@ class MainActivity : Activity() {
         return l.t("Darrera còpia desada", "Última copia guardada", "Last backup saved") + " · $date"
     }
     private fun history() {
+        if (!allVehicles) body.addView(text(store.vehicles.active().label, 17, Color.WHITE))
+        body.addView(Switch(this).apply {
+            text = l.t("Tots els vehicles", "Todos los vehículos", "All vehicles")
+            setTextColor(Color.WHITE)
+            isChecked = allVehicles
+            setOnCheckedChangeListener { _, checked -> allVehicles = checked; showPage() }
+        })
         val day = selectedDay
         val zone = ZoneId.systemDefault()
         if (day == null) {
@@ -681,6 +854,7 @@ class MainActivity : Activity() {
         tripsBetween(day, day.plusDays(1), zone).use { c -> while (c.moveToNext()) {
             any = true; val id = c.getLong(0); val demo = c.getInt(3) == 1; val state = c.getString(4)
             var name = DateFormat.getTimeInstance(DateFormat.SHORT, l.locale).format(Date(c.getLong(1))) + " · #$id"
+            if (allVehicles) name += " · ${c.getString(5)}"
             if (demo) name += " · " + l.t("SIMULACIÓ", "SIMULACIÓN", "SIMULATION")
             if (state == "recording") name += " · " + l.t("en curs", "en curso", "recording")
             if (state == "interrupted") name += " · " + l.t("interromput", "interrumpido", "interrupted")
@@ -689,7 +863,8 @@ class MainActivity : Activity() {
         if (!any) body.addView(text(l.t("Cap viatge aquest dia.", "Ningún viaje este día.", "No trips on this day."), 16, 0xFFB3C8BD.toInt()))
     }
     private fun tripsBetween(first: LocalDate, end: LocalDate, zone: ZoneId): Cursor = store.tripsBetween(
-        first.atStartOfDay(zone).toInstant().toEpochMilli(), end.atStartOfDay(zone).toInstant().toEpochMilli()
+        first.atStartOfDay(zone).toInstant().toEpochMilli(), end.atStartOfDay(zone).toInstant().toEpochMilli(),
+        if (allVehicles) null else store.vehicles.active().id
     )
     private fun trip(id: Long) {
         openedTrip = id
@@ -701,7 +876,7 @@ class MainActivity : Activity() {
             runOnUiThread {
                 if (isFinishing || isDestroyed || page != 1 || openedTrip != id) return@runOnUiThread
                 body.removeAllViews()
-                val tripTitle = l.t("Viatge", "Viaje", "Trip") + " #$id"
+                val tripTitle = l.t("Viatge", "Viaje", "Trip") + " #$id · ${store.tripVehicle(id)}"
                 body.addView(text(if (store.isDemo(id)) "$tripTitle · " + l.t("SIMULACIÓ", "SIMULACIÓN", "SIMULATION") else tripTitle, 20, Color.WHITE))
                 body.addView(text(info, 18, 0xFFDBE8E0.toInt()))
                 body.addView(button(l.t("Exporta informe PDF", "Exportar informe PDF", "Export PDF report")) { export(id, "pdf") })
@@ -720,28 +895,113 @@ class MainActivity : Activity() {
             else -> super.onBackPressed()
         }
     }
-    @Suppress("DEPRECATION")
-    private fun associate() {
-        val address = prefs.getString("address", "") ?: ""
-        if (address.isEmpty()) { chooseAdapter(startRecording = false); return }
+    private fun setAutomaticRecording(enabled: Boolean) {
+        prefs.edit().putBoolean("auto", enabled).apply()
+        observeAutomaticDevices(enabled)
+    }
+
+    private fun observeAutomaticDevices(enabled: Boolean) {
+        val addresses = store.vehicles.addresses() + listOfNotNull(prefs.getString(ObdAutoStart.CAR_ADDRESS, null))
+        addresses.forEach { ObdAutoStart.observe(this, it, enabled) }
+    }
+
+    private fun chooseCarTrigger() {
+        if (activeAddress() == null) {
+            chooseAdapter(startRecording = false)
+            return
+        }
+        if (!ObdAutoStart.hasBluetoothPermission(this)) {
+            requestPermissions(arrayOf(Manifest.permission.BLUETOOTH_CONNECT), OBD_CAR_PERMISSION)
+            return
+        }
+        val obd = store.vehicles.addresses()
+        val devices = getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices.orEmpty()
+            .filter { it.address !in obd }.sortedBy { it.name ?: it.address }
+        if (devices.isEmpty()) {
+            toast(l.t("Aparella primer el Bluetooth del cotxe als ajustos d’Android.", "Empareja primero el Bluetooth del coche en los ajustes de Android.", "Pair the car’s Bluetooth in Android settings first."))
+            return
+        }
+        AlertDialog.Builder(this).setTitle(l.t("Tria el Bluetooth del cotxe", "Elige el Bluetooth del coche", "Select the car’s Bluetooth"))
+            .setItems(devices.map { "${it.name ?: it.address}\n${it.address}" }.toTypedArray()) { _, which ->
+                associate(devices[which].address, true)
+            }.show()
+    }
+
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    private fun associate(address: String, car: Boolean) {
         val manager = getSystemService(CompanionDeviceManager::class.java)
-        if (manager == null) { toast(l.t("Associació no disponible", "Asociación no disponible", "Association unavailable")); return }
-        if (manager.associations.contains(address)) { observePresence(manager, address); return }
+        if (manager == null || !packageManager.hasSystemFeature(PackageManager.FEATURE_COMPANION_DEVICE_SETUP)) {
+            toast(l.t("Associació no disponible", "Asociación no disponible", "Association unavailable"))
+            return
+        }
+        if (manager.associations.any { it.equals(address, ignoreCase = true) }) {
+            completeAssociation(address, car)
+            return
+        }
         val request = AssociationRequest.Builder().addDeviceFilter(BluetoothDeviceFilter.Builder().setAddress(address).build()).setSingleDevice(true).build()
         manager.associate(request, object : CompanionDeviceManager.Callback() {
-            override fun onDeviceFound(sender: IntentSender) {
-                try { startIntentSenderForResult(sender, 43, null, 0, 0, 0) }
-                catch (_: IntentSender.SendIntentException) { toast(l.t("No s’ha pogut associar", "No se ha podido asociar", "Association failed")) }
+            override fun onDeviceFound(sender: IntentSender) = showAssociation(sender)
+            override fun onAssociationPending(intentSender: IntentSender) = showAssociation(intentSender)
+
+            private fun showAssociation(sender: IntentSender) {
+                pendingAssociation = address
+                try {
+                    startIntentSenderForResult(sender, if (car) ASSOCIATE_CAR else ASSOCIATE_OBD, null, 0, 0, 0)
+                } catch (_: IntentSender.SendIntentException) {
+                    pendingAssociation = null
+                    onFailure(null)
+                }
             }
-            override fun onFailure(error: CharSequence?) { toast(l.t("No s’ha pogut associar l’OBD", "No se ha podido asociar el OBD", "OBD association failed")) }
+            override fun onFailure(error: CharSequence?) {
+                toast(l.t("No s’ha pogut associar el dispositiu", "No se ha podido asociar el dispositivo", "Device association failed"))
+            }
         }, handler)
     }
-    @Suppress("DEPRECATION")
-    private fun observePresence(manager: CompanionDeviceManager, address: String) {
+
+    private fun completeAssociation(address: String, car: Boolean) {
+        val obd = store.vehicles.addresses()
+        if (if (car) address in obd else address !in obd) return
+        if (!ObdAutoStart.observe(this, address, true)) {
+            toast(l.t("No s’ha pogut activar la detecció", "No se ha podido activar la detección", "Presence detection could not be enabled"))
+            return
+        }
+        val previousCar = prefs.getString(ObdAutoStart.CAR_ADDRESS, null)
+        val edit = prefs.edit().putBoolean("auto", true)
+        if (car) {
+            val name = getSystemService(BluetoothManager::class.java)?.adapter?.bondedDevices
+                ?.firstOrNull { it.address == address }?.name
+            edit.putString(ObdAutoStart.CAR_ADDRESS, address).putString("auto_car_name", name ?: address)
+        }
+        edit.apply()
+        if (car && previousCar != null && previousCar != address && previousCar !in obd) {
+            ObdAutoStart.observe(this, previousCar, false)
+        }
+        observeAutomaticDevices(true)
+        toast(l.t("Inici automàtic activat", "Inicio automático activado", "Automatic start enabled"))
+        showPage()
+    }
+
+    private fun armObd() {
+        if (RecordingService.running) {
+            toast(l.t("El servei ja està actiu", "El servicio ya está activo", "Service is already active"))
+            return
+        }
+        if (activeAddress() == null || !ObdAutoStart.hasBluetoothPermission(this)) {
+            chooseAdapter(startRecording = false)
+            return
+        }
+        if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), OBD_WAIT_NOTIFICATION)
+            return
+        }
         try {
-            if (Build.VERSION.SDK_INT >= 31) manager.startObservingDevicePresence(address)
-            prefs.edit().putBoolean("auto", true).apply(); toast(l.t("Inici automàtic activat", "Inicio automático activado", "Automatic start enabled"))
-        } catch (_: Exception) { toast(l.t("No s’ha pogut activar la detecció", "No se ha podido activar la detección", "Presence detection could not be enabled")) }
+            startForegroundService(Intent(this, RecordingService::class.java)
+                .setAction(RecordingService.ACTION_ARM_OBD).putExtra("background", true))
+            page = 0
+            showPage()
+        } catch (_: RuntimeException) {
+            toast(l.status("permission"))
+        }
     }
     private fun export(id: Long, type: String) {
         if (id == RecordingService.activeTrip) { toast(l.t("Atura el viatge abans d’exportar", "Detén el viaje antes de exportar", "Stop the trip before exporting")); return }
@@ -789,9 +1049,11 @@ class MainActivity : Activity() {
                     } else {
                         val input = contentResolver.openInputStream(uri) ?: throw IOException("Backup source unavailable")
                         input.use { source -> temporary.outputStream().use { Streams.copy(source, it) } }
+                        val addresses = store.vehicles.addresses()
                         val count = TripBackup.read(store, temporary)
-                        if (count > 0) BackupSync.schedule(this)
-                        if (count == 0) l.t("La còpia no conté viatges nous", "La copia no contiene viajes nuevos", "The backup contains no new trips")
+                        ObdAutoStart.updateObservations(this, addresses, store.vehicles.addresses())
+                        BackupSync.schedule(this)
+                        if (count == 0) l.t("Còpia importada · cap viatge nou", "Copia importada · ningún viaje nuevo", "Backup imported · no new trips")
                         else l.t("Viatges importats: $count", "Viajes importados: $count", "Trips imported: $count")
                     }
                 } finally { temporary.delete() }
@@ -811,8 +1073,11 @@ class MainActivity : Activity() {
     }
     override fun onActivityResult(request: Int, result: Int, data: Intent?) {
         super.onActivityResult(request, result, data)
-        if (request == 43 && result == RESULT_OK) {
-            observePresence(getSystemService(CompanionDeviceManager::class.java), prefs.getString("address", "") ?: ""); return
+        if (request == ASSOCIATE_OBD || request == ASSOCIATE_CAR) {
+            val address = pendingAssociation
+            pendingAssociation = null
+            if (result == RESULT_OK && address != null) completeAssociation(address, request == ASSOCIATE_CAR)
+            return
         }
         val uri: Uri = data?.data ?: return
         if (result == RESULT_OK && request == OFFLINE_MAP_IMPORT) {
@@ -848,7 +1113,7 @@ class MainActivity : Activity() {
     private fun exportJson(out: OutputStream, id: Long) {
         val writer = JsonWriter(OutputStreamWriter(out, Charsets.UTF_8)); writer.setIndent("  ")
         writer.beginObject().name("schema").value(2).name("tripId").value(id).name("simulation").value(store.isDemo(id))
-            .name("vehicle").value("Peugeot e-2008 2020").name("profile").value("Stellantis e-CMP v4; Esa Pelttari CC-BY-4.0")
+            .name("vehicle").value(store.tripVehicle(id)).name("profile").value("Stellantis e-CMP v4; Esa Pelttari CC-BY-4.0")
         for (table in listOf("trips", "samples", "readings", "trip_summaries")) {
             writer.name(table).beginArray(); val where = if (table == "trips") "id" else "trip"
             store.readableDatabase.rawQuery("SELECT * FROM $table WHERE $where=?", arrayOf(id.toString())).use { c ->
@@ -875,11 +1140,16 @@ class MainActivity : Activity() {
     private fun toast(message: String) { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
 
     private companion object {
+        const val ASSOCIATE_OBD = 43
         const val BACKUP_EXPORT = 44
         const val BACKUP_IMPORT = 45
         const val OBD_SETTINGS_PERMISSION = 46
         const val BACKUP_DESTINATION = 47
         const val BACKUP_SOURCE = 48
         const val OFFLINE_MAP_IMPORT = 49
+        const val PLANNER_LOCATION_PERMISSION = 50
+        const val ASSOCIATE_CAR = 51
+        const val OBD_CAR_PERMISSION = 52
+        const val OBD_WAIT_NOTIFICATION = 53
     }
 }

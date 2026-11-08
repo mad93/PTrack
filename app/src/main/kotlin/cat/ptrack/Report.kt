@@ -41,7 +41,7 @@ class Report(private val context: Context) {
             for ((label, value) in rows) { text(c, label, 36, y, 11, Color.DKGRAY); text(c, value, 340, y, 11, Color.BLACK); y += 31 }
             chart(c, samples, { it.soc }, l.signal("soc"), "%", 443, 150, 0.0, 100.0)
             lines(c, listOf(
-                l.t("Vehicle: Peugeot e-2008 2020 · perfil Stellantis e-CMP.", "Vehículo: Peugeot e-2008 2020 · perfil Stellantis e-CMP.", "Vehicle: Peugeot e-2008 2020 · Stellantis e-CMP profile."),
+                l.t("Vehicle", "Vehículo", "Vehicle") + " · " + store.tripVehicle(id),
                 l.t("Potència = V × A / 1000. Signe +: consum; signe −: entrada a la bateria.", "Potencia = V × A / 1000. Signo +: consumo; signo −: entrada a batería.", "Power = V × A / 1000. Positive: discharge; negative: energy into battery."),
                 l.t("Energia i distància: integració trapezoïdal de lectures OBD vàlides.", "Energía y distancia: integración trapezoidal de lecturas OBD válidas.", "Energy and distance: trapezoidal integration of valid OBD readings."),
                 l.t("Els buits de més de 10 s no s’integren. La mitjana inclou les aturades registrades.", "Los huecos de más de 10 s no se integran. La media incluye paradas registradas.", "Gaps over 10 s are excluded. Average speed includes recorded stops."),

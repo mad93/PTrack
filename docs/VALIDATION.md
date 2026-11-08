@@ -1,5 +1,48 @@
 # Validació
 
+## Perfils de vehicle — 8/11/2026
+
+- Han passat les proves unitàries, inclosos els casos de MAC única, compartida amb el perfil actiu i ambigua. S’han compilat l’APK de depuració i les proves instrumentades.
+- La comprovació local amb SQLite ha executat la migració v5 amb dades de prova. Ha conservat els identificadors de viatges i càrrega DC, ha recuperat el darrer SOH real i ha separat les consultes d’historial.
+- L’emulador de prova ha quedat fora de línia a ADB. Queda pendent executar les proves instrumentades en Android i validar la connexió amb adaptadors OBD reals i Android Auto al Peugeot. [Procediment de prova](ANDROID-AUTO-VEHICLE.md#prova-de-linici-autom%C3%A0tic-obd).
+
+## Perfil DC i previsió a les parades — 8/11/2026
+
+- Han passat `testDebugUnitTest` i `compileDebugAndroidTestKotlin`. Les proves unitàries cobreixen la discriminació AC/DC amb lectura de cable i tensió, les temperatures comparables entre sessions, el límit de potència del punt, la corba de referència i el càlcul de l'hora de les parades següents.
+- Una consulta HTTPS real d'Open-Meteo per a dos punts públics ha retornat dues sèries de 48 temperatures horàries amb marques de temps UNIX. Queda pendent la consulta des del Pixel i la captura d'una càrrega DC real al Peugeot, seguida d'una càrrega AC per contrastar la classificació.
+
+## Inici automàtic OBD al codi — 8/11/2026
+
+- `testDebugUnitTest` ha passat, inclosos els tres casos nous de durada de la sessió OBD. `compileDebugAndroidTestKotlin` ha compilat les proves instrumentades.
+- ADB no ha detectat cap dispositiu. Queda pendent verificar el disparador de l’ELM327 o del Peugeot amb el Pixel 10 bloquejat, la reconnexió i l'aturada sense crear viatges buits. [Procediment i diagnòstic](ANDROID-AUTO-VEHICLE.md#prova-de-linici-autom%C3%A0tic-obd).
+
+## PTrack 0.2.3 al Pixel — 8/11/2026
+
+- Correcció del toc dels suggeriments de cerca. `testDebugUnitTest`, `compileDebugAndroidTestKotlin` i `assembleDebug` han passat. APK `artifacts/ptrack-pixel-023-20261108/PTrack-0.2.3.apk`, paquet `cat.ptrack`, versió 0.2.3 (5), amb certificat coincident amb la 0.2.2. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `5DD04E93FFD186F32B046F8AF1C949BDA618362AB4A328E1828FF1BFD75AEB64`.
+- Actualització a les 02:34 CET amb KingInstaller 2.5 i Shizuku 13.6.0, després de l'anàlisi autoritzada de Play Protect. Instal·lador `com.android.vending`, iniciador `com.google.android.packageinstaller` i servei d'Android Auto resoluble. Shizuku aturat. Informe `artifacts/android-auto-car-check/20261108-023449-784/`.
+- Còpia prèvia a `%LOCALAPPDATA%\PTrack\Backups\ptrack-before-0.2.3-20261108.tar`. SQLite manté la integritat i conserva els mateixos identificadors de 3 viatges, 3.889 mostres i 4.286 lectures. El mapa nacional continua actiu. La prova al Peugeot queda pendent.
+- Al Pixel s'ha seleccionat Rupit amb Photon i el Colomer de Taradell amb l'ICGC. Els tres controls lliscants són visibles. El càlcul ha retornat dues propostes, els botons dels navegadors i una capacitat de referència de 46 kWh. La proposta seleccionada mostrava 51 km i 152 min, una durada pendent de contrastar. La ruta s'ha deixat com a esborrany.
+
+## PTrack 0.2.2 al Pixel — 8/11/2026
+
+- `testDebugUnitTest`, `compileDebugAndroidTestKotlin` i `assembleDebug` han passat. APK `artifacts/ptrack-pixel-022-20261108/PTrack-0.2.2.apk`, paquet `cat.ptrack`, versió 0.2.2 (4), amb el mateix certificat que la 0.2.1. SHA-256 local, copiat i instal·lat `987AE3A809A5AED8F8A6A0163AC3FA8CAA2A3CAECBA6B874B4320F0FA4000F90`.
+- Actualització a les 02:25 CET amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l'anàlisi autoritzada. Android ha confirmat l'actualització i ha registrat `com.android.vending` com a instal·lador i `com.google.android.packageinstaller` com a iniciador. El servei d'Android Auto és resoluble i Shizuku s'ha aturat. Informe `artifacts/android-auto-car-check/20261108-022609-587/`. La prova al Peugeot queda pendent.
+- Còpia prèvia validada a `%LOCALAPPDATA%\PTrack\Backups\ptrack-before-0.2.2-20261108.tar`. SQLite ha passat la comprovació d'integritat i es conserven els mateixos identificadors de 3 viatges, 3.889 mostres i 4.286 lectures. El mapa nacional de Valhalla continua actiu.
+- Al Pixel, Photon ha mostrat suggeriments per a Rupit, però tocar un resultat no el seleccionava. La llista d'Android reutilitzava el gestor de tocs de l'estat de càrrega.
+
+## PTrack 0.2.1 amb el planificador visual al Pixel — 8/11/2026
+
+- `testDebugUnitTest` i `assembleDebug` han passat. APK `artifacts/ptrack-visual-pixel-20261108/PTrack-0.2.1-Planificador.apk`, paquet `cat.ptrack`, versió 0.2.1 (3), amb el mateix certificat que la 0.2.0. SHA-256 verificat abans de copiar i després d'instal·lar `FA8CF3C41F1628C4B164BDB00493071B04A03A36F1E352ED6B38EBD1102299B0`.
+- Actualització a les 01:45 CET amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l'anàlisi autoritzada per l'usuari i Android ha confirmat l'actualització. L'instal·lador és `com.android.vending`, l'iniciador és `com.google.android.packageinstaller` i el servei de PTrack és resoluble. Shizuku s'ha aturat. Informe `artifacts/android-auto-car-check/20261108-014542-092/`.
+- Còpia prèvia validada a `%LOCALAPPDATA%\PTrack\Backups\ptrack-before-visual-planner-20261108.tar`. SQLite ha superat la comprovació d'integritat i conserva els identificadors dels 3 viatges, les 3.889 mostres i les 4.286 lectures. El mapa nacional de Valhalla continua actiu. La prova al Peugeot queda pendent.
+- Obert el planificador al Pixel amb el 80% per defecte. Una ruta directa de prova a Barcelona ha mostrat el traçat al mapa, 5 km, 7 minuts i un 77,4% previst a l'arribada. S'han verificat els botons **Google Maps** i **Waze** a la pantalla del resultat. L'esborrany s'ha mantingut sense activar per conservar l'itinerari existent. Queda pendent provar l'obertura dels navegadors i una ruta amb recàrregues.
+
+## Planificador visual al codi — 8/11/2026
+
+- `testDebugUnitTest`, `compileDebugAndroidTestKotlin` i `assembleDebug` han passat. La prova del motor confirma que es conserva la geometria dels trams seleccionats i que la reserva reduïda només s'aplica a l'arribada indicada.
+- Valhalla 3.9.1 ha retornat tres corredors amb geometria i elevació per a Barcelona Sants–Madrid Atocha al graf nacional, de 619,34, 691,84 i 670,22 km. És una comprovació del càlcul viari a l'ordinador. PTrack avalua després quins corredors són viables amb la bateria i les parades.
+- L'estil Liberty d'OpenFreeMap ha respost i Photon ha retornat Barcelona Sants amb les capçaleres de llengua catalana, castellana i anglesa. Queda pendent comprovar al Pixel la pantalla, les accions sobre parades i l'obertura efectiva dels navegadors.
+
 ## Mapa d'Espanya sense illes al Pixel — 8/11/2026
 
 - Paquet `PTrack-Mapa-Espanya-sense-illes.zip`, generat el 7/11 amb Valhalla 3.9.1 a partir de l'extracte OSM de Geofabrik del 5/11 i 109 fitxers d'elevació de Mapzen. Cobreix l'Espanya peninsular, Ceuta i Melilla. Mida del ZIP **1.897.361.887 bytes** i del paquet extret **3.006.985.245 bytes**. SHA-256 verificat a l'ordinador i al Pixel `bb4979681ca4a2aac8bd54516023c0a75685abd0ee7af752396b9ffdba80ac71`.

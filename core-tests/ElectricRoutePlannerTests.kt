@@ -16,7 +16,7 @@ class ElectricRoutePlannerTests {
     @Test fun addsMultipleChargesAndKeepsBatteryReserve() {
         val stops = listOf(Stop(first, "First", 50.0), Stop(second, "Second", 100.0))
         val points = listOf(origin, first, second, destination)
-        val plan = checkNotNull(ElectricRoutePlanner.plan(origin, destination, stops, 50.0, 70.0, 10.0, 100.0, Priority.FASTEST) { a, b ->
+        val plan = checkNotNull(ElectricRoutePlanner.plan(origin, destination, stops, 50.0, 70.0, 10.0, Priority.FASTEST) { a, b ->
             val legs = points.indexOf(b) - points.indexOf(a)
             Leg(90.0 * legs, 28.0 * legs, 10.0 * legs)
         })
@@ -36,7 +36,7 @@ class ElectricRoutePlannerTests {
             (second to destination) to Leg(80.0, 22.0, 0.0)
         )
         fun selected(priority: Priority) = checkNotNull(ElectricRoutePlanner.plan(
-            origin, destination, stops, 60.0, 60.0, 10.0, 200.0, priority
+            origin, destination, stops, 60.0, 60.0, 10.0, priority
         ) { a, b -> legs[a to b] }).charges.single().stop
         assertEquals(stops.first(), selected(Priority.FASTEST))
         assertEquals(stops.last(), selected(Priority.LEAST_CHARGING))
@@ -44,6 +44,22 @@ class ElectricRoutePlannerTests {
 
     @Test fun rejectsDirectRouteWhenArrivalWouldFallBelowReserve() {
         assertNull(ElectricRoutePlanner.plan(origin, destination, emptyList(), 50.0, 50.0,
-            20.0, 100.0, Priority.FASTEST) { _, _ -> Leg(20.0, 16.0, 0.0) })
+            20.0, Priority.FASTEST) { _, _ -> Leg(20.0, 16.0, 0.0) })
+    }
+
+    @Test fun reducedReserveAppliesOnlyToTheSelectedArrivalAndRetainsDrivenLegs() {
+        val stop = Stop(second, "Next charger", 100.0)
+        val approach = Leg(90.0, 37.0, 0.0, 200.0, listOf(origin, second))
+        val onward = Leg(90.0, 44.0, 0.0, 210.0, listOf(second, destination))
+        val roads = mapOf((origin to second) to approach, (second to destination) to onward)
+        fun plan(reserveAt: (Point) -> Double) = ElectricRoutePlanner.plan(origin, destination,
+            listOf(stop), 50.0, 80.0, 10.0, Priority.FASTEST, reserveAt) { a, b -> roads[a to b] }
+
+        assertNull(plan { 10.0 })
+        assertNull(plan { if (it == destination) 5.0 else 10.0 })
+        val result = checkNotNull(plan { if (it == second) 5.0 else 10.0 })
+        assertEquals(3.0, result.charges.single().arrivalKwh, 0.0)
+        assertTrue(result.arrivalKwh >= 5.0)
+        assertEquals(listOf(approach, onward), result.legs)
     }
 }

@@ -1,8 +1,14 @@
 # PTrack al cotxe: guia d'instal·lació i actualització
 
-Revisió: 7/11/2026. **L'usuari confirma que PTrack Prova cotxe funciona al Peugeot després de la instal·lació amb KingInstaller i Shizuku.** La confirmació correspon a la variant `cat.ptrack.cartest` i al procediment del 6/11; no s'extrapola a altres telèfons o versions d'Android Auto, ni acredita per si sola tots els càlculs o lectures OBD.
+Revisió: 8/11/2026. **L'usuari confirma que PTrack Prova cotxe funciona al Peugeot després de la instal·lació amb KingInstaller i Shizuku.** La confirmació correspon a la variant `cat.ptrack.cartest` i al procediment del 6/11; no s'extrapola a altres telèfons o versions d'Android Auto, ni acredita per si sola tots els càlculs o lectures OBD.
 
 ## Ús habitual i actualitzacions
+
+El 8/11/2026 a les 02:34 CET s'ha actualitzat la PTrack habitual a **0.2.3 (5)** amb el mateix procediment de KingInstaller i Shizuku per corregir la selecció dels resultats del planificador. Play Protect ha completat l'anàlisi autoritzada. S'han verificat l'APK, l'origen, el servei, els viatges i el mapa nacional. Shizuku s'ha aturat. La prova al Peugeot queda pendent. [Registre de validació](VALIDATION.md#ptrack-023-al-pixel--8112026)
+
+El 8/11/2026 a les 02:25 CET s'ha actualitzat la PTrack habitual a **0.2.2 (4)** amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l'anàlisi autoritzada. S'han verificat l'APK instal·lada, l'origen, el servei d'Android Auto i la conservació dels viatges i del mapa nacional. Shizuku s'ha aturat. La prova al Peugeot queda pendent. [Registre de validació](VALIDATION.md#ptrack-022-al-pixel--8112026)
+
+El 8/11/2026 s'ha actualitzat la PTrack habitual a **0.2.1 (3)** al Pixel amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l'anàlisi autoritzada. S'han verificat l'APK instal·lada, l'origen, el servei d'Android Auto i la conservació dels viatges i del mapa nacional. Shizuku s'ha aturat. La prova d'aquesta versió al Peugeot queda pendent. [Registre de validació](VALIDATION.md#ptrack-021-amb-el-planificador-visual-al-pixel--8112026)
 
 El 7/11/2026 s'ha actualitzat la PTrack habitual a **0.2.0 (2)** al Pixel amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha analitzat l'APK amb l'autorització de l'usuari. S'han verificat la conservació dels viatges, l'origen de la instal·lació i el servei d'Android Auto. Shizuku s'ha aturat i s'ha importat el mapa pilot de Ceuta a Planificador. Queda pendent la prova d'aquesta versió al Peugeot. [Registre de validació](VALIDATION.md).
 
@@ -36,6 +42,18 @@ Si hi ha diversos dispositius, afegeix `-Serial <serial>` obtingut amb `adb devi
 Els informes queden a `artifacts/android-auto-car-check/`. Aquesta carpeta i les APK
 estan ignorades per Git; el procediment persistent és aquest document i `AGENTS.md`,
 no depèn de conservar els artefactes ni el xat. No desa claus privades de signatura.
+
+## Prova de l'inici automàtic OBD
+
+1. A **PTrack → Configuració → Perfils de vehicle**, selecciona el perfil del cotxe. Vincula-hi l’ELM327 aparellat i prem **Associa l’OBD per a l’inici automàtic**. Repeteix-ho per a cada adaptador i comprova’n la MAC si tenen el mateix nom. Si el mòbil ha d'iniciar la connexió amb l'ELM327, prem també **Associa el Bluetooth del cotxe** i tria el Peugeot aparellat. Comprova que **Registre automàtic en connectar** queda activat.
+2. Amb el cotxe apagat, surt de PTrack, espera que desaparegui la notificació d'un intent anterior i bloqueja el telèfon. Engega el cotxe sense obrir l'app. Comprova que apareix la notificació i que es desa un sol viatge amb mostres reals. Repeteix-ho amb Android Auto per cable per comprovar si en aquesta configuració el Peugeot estableix la connexió Bluetooth que fa de disparador.
+3. Per distingir el senyal Bluetooth, l'arrencada del servei, la connexió SPP i la primera mostra vàlida, consulta `adb logcat -s PTrackObdAuto:D`. Sense dades inicials, la connexió automàtica té una finestra de 60 segons. Amb dades, 45 segons sense cap mostra vàlida tanquen el viatge.
+4. Si el cotxe i l'OBD no generen cap senyal útil, prem **Espera l’OBD durant 30 minuts** abans de sortir. El servei manté la notificació i la CPU disponible durant l'espera, i deixa 45 segons entre intents quan no hi ha cap viatge actiu. Si comença un viatge, el registre pot continuar més enllà dels 30 minuts. L'acció **Atura** de la notificació acaba la sessió.
+5. Deixa actiu un perfil diferent i connecta l’OBD vinculat a un únic vehicle. Verifica que el perfil canvia en rebre la primera lectura vàlida i que el viatge apareix a l’historial d’aquell vehicle. Comparteix la mateixa MAC entre dos perfils i repeteix-ho. Amb un perfil vinculat actiu, s’ha de mantenir. Amb un tercer perfil actiu, la notificació ha de demanar que triïs el vehicle abans que es desi el viatge. Comprova que una reconnexió durant el viatge en conserva el perfil.
+
+La prova amb el Pixel 10 bloquejat, l'ELM327 i el Peugeot queda pendent. Una arrencada automàtica pot registrar l'OBD amb l'app en segon pla. El GPS continua disponible quan s'obre PTrack i hi ha permís de localització precisa.
+
+Un perfil identifica un vehicle concret. Els perfils separen l’historial i els càlculs del planificador. La lectura de senyals OBD continua utilitzant el descodificador Stellantis e-CMP.
 
 ## Què explica la diferència amb el DHU
 

@@ -99,9 +99,15 @@ internal object BackupSync {
                         val input = context.contentResolver.openInputStream(Uri.parse(source)) ?: throw IOException("Sync source unavailable")
                         input.use { stream -> file.outputStream().use { Streams.copy(stream, it) } }
                         // A newly linked device may not have published its first trip yet.
-                        if (source in sources(context) && file.length() > 0 && !Thread.currentThread().isInterrupted &&
-                            TripBackup.read(store, file, automatic = true) > 0
-                        ) preferences.edit().putLong(HISTORY_CHANGED, System.currentTimeMillis()).apply()
+                        if (source in sources(context) && file.length() > 0 && !Thread.currentThread().isInterrupted) {
+                            val addresses = store.vehicles.addresses()
+                            val before = store.vehicles.list()
+                            val trips = TripBackup.read(store, file)
+                            ObdAutoStart.updateObservations(context, addresses, store.vehicles.addresses())
+                            if (trips > 0 || before != store.vehicles.list()) {
+                                preferences.edit().putLong(HISTORY_CHANGED, System.currentTimeMillis()).apply()
+                            }
+                        }
                     }
                 } catch (_: TripBackup.RecordingInProgress) {
                     return false

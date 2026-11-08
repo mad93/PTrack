@@ -68,7 +68,7 @@ class PTrackCarScreen private constructor(context: CarContext, private val detai
     private fun connectObd(): String {
         if (VehicleTelemetry.LIVE.snapshot().obdConnected) return "OBD connectat"
         if (RecordingService.running && RecordingService.state == "demo") return "Atura la simulació al mòbil per connectar l’OBD"
-        val address = carContext.getSharedPreferences("settings", 0).getString("address", "")
+        val address = Store(carContext).use { it.vehicles.active().obdAddress }
         if (address.isNullOrEmpty()) return "Configura l’adaptador OBD a PTrack al mòbil"
         if (Build.VERSION.SDK_INT >= 31 &&
             carContext.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED

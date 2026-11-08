@@ -21,3 +21,7 @@ The Esco EV OBD Scanner implementation was consulted for ELM327 setup, ECU targe
 ## Valhalla Mobile
 
 PTrack uses [Valhalla Mobile 0.6.4](https://github.com/Rallista/valhalla-mobile/tree/0.6.4) and its Valhalla engine for offline routing. Their MIT notice is included in `app/src/main/assets/VALHALLA-MOBILE-LICENSE.txt`. Road and elevation data have separate terms, documented with the [offline map format](docs/EV-PLANNER.md#paquets-de-rutes-locals).
+
+## MapLibre Native
+
+PTrack uses [MapLibre Native for Android 13.6.1](https://github.com/maplibre/maplibre-native/tree/android-v13.6.1). Its BSD 2-Clause notice is included in `app/src/main/assets/MAPLIBRE-NATIVE-LICENSE.txt`. The visual map uses [OpenFreeMap](https://openfreemap.org/quick_start/) with [OpenStreetMap data](https://www.openstreetmap.org/copyright).

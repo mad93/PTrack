@@ -8,10 +8,8 @@ import android.content.Intent
 class ObdReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != BluetoothDevice.ACTION_ACL_CONNECTED) return
-        val prefs = context.getSharedPreferences("settings", 0)
+        if (!ObdAutoStart.hasBluetoothPermission(context)) return
         @Suppress("DEPRECATION") val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
-        if (device == null || !prefs.getBoolean("auto", false) || device.address != prefs.getString("address", "")) return
-        try { context.startForegroundService(Intent(context, RecordingService::class.java).putExtra("background", true)) }
-        catch (_: RuntimeException) { RecordingService.state = "permission" }
+        if (device != null) ObdAutoStart.connected(context, device.address, "ACL")
     }
 }

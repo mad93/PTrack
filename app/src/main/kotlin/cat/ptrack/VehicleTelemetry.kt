@@ -8,7 +8,7 @@ class VehicleTelemetry {
         val consumed: Double, val recovered: Double, val average: Double, val summary: TripSummary)
     data class Snapshot(val state: String, val sample: Sample?, val receivedAt: Long, val simulation: Boolean,
         val totals: Totals?, val cable: Double?, val cableAt: Long, val energy: Double?, val energyAt: Long,
-        val soh: Double? = null, val sohAt: Long = 0, val obdConnected: Boolean = false) {
+        val soh: Double? = null, val sohAt: Long = 0, val obdConnected: Boolean = false, val vehicleId: String? = null) {
         fun remaining(now: Long): Double = if (current(now) != null && energy != null && now >= energyAt && now - energyAt <= FRESH_MS) energy else Double.NaN
         fun soh(now: Long): Double = if (soh != null && now >= sohAt && now - sohAt <= FRESH_MS) soh else if (simulation) 96.0 else Double.NaN
         fun current(now: Long): Sample? = if ((state == "connected" || state == "demo") && sample != null &&
@@ -42,6 +42,14 @@ class VehicleTelemetry {
         // A presentation failure must never terminate recording.
         for (listener in listeners) try { listener.run() } catch (_: RuntimeException) { }
     }
+    fun resetVehicle(id: String, connected: Boolean = false) {
+        synchronized(this) {
+            stats = TripStats(); tripId = -1; active = false
+            published = Snapshot("disconnected", null, 0, false, null, null, 0, null, 0,
+                obdConnected = connected, vehicleId = id)
+        }
+        changed()
+    }
     fun status(state: String) {
         synchronized(this) {
             val sample = if (state == "connected" || state == "demo") published.sample else null
@@ -70,6 +78,13 @@ class VehicleTelemetry {
     }
     fun cable(value: Double?, elapsed: Long) {
         synchronized(this) { published = published.copy(cable = value?.takeIf { it.isFinite() }, cableAt = elapsed) }
+        changed()
+    }
+    fun externalCharge(sample: Sample, elapsed: Long, cableAt: Long) {
+        synchronized(this) {
+            published = published.copy(state = "connected", sample = sample, receivedAt = elapsed,
+                simulation = false, cable = 1.0, cableAt = cableAt)
+        }
         changed()
     }
     fun finish(id: Long) {
