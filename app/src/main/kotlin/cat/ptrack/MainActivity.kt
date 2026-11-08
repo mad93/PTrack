@@ -233,13 +233,15 @@ class MainActivity : Activity() {
         val screen = plannerScreen ?: PlannerScreen(this, l, importMap = {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("*/*"), OFFLINE_MAP_IMPORT)
-        }, locate = ::locatePlannerOrigin) { draft, maps ->
+        }, locate = ::locatePlannerOrigin, navigate = { draft, maps ->
             val saved = plans.read()
-            val itinerary = saved?.takeIf { it.points == draft.points && it.next != null } ?: draft
+            val itinerary = saved?.takeIf {
+                it.points == draft.points && it.next != null && (it.origin == null || it.origin == draft.origin)
+            }?.let { draft.copy(completed = it.completed) } ?: draft
             plans.save(itinerary)
             showPage()
-            itinerary.next?.let { openNextNavigation(it, maps) }
-        }.also {
+            openItinerary(itinerary, maps)
+        }, showCharger = ::openCharger).also {
             plannerScreen = it
             if (started) it.mapView.onStart()
             if (resumed) it.mapView.onResume()
@@ -247,7 +249,7 @@ class MainActivity : Activity() {
         body.addView(screen.view)
         screen.vehicleChanged(store.vehicles.active())
         screen.mapStatus(OfflineValhalla.installed(this), importingMap)
-        body.addView(text(l.t("Navegació per trams", "Navegación por tramos", "Leg-by-leg navigation"), 20, Color.WHITE))
+        body.addView(text(l.t("Itinerari desat", "Itinerario guardado", "Saved itinerary"), 20, Color.WHITE))
         if (plan == null || point == null) {
             val message = if (plan == null) l.t("Afegeix les parades i el destí del viatge.",
                 "Añade las paradas y el destino del viaje.", "Add the stops and destination for your trip.")
@@ -258,20 +260,14 @@ class MainActivity : Activity() {
         }
         val heading = if (plan.remaining.size == 1) l.t("Destí", "Destino", "Destination")
             else l.t("Pròxima parada", "Próxima parada", "Next stop")
-        body.addView(text("$heading · ${plan.completed + 1}/${plan.points.size}\n$point", 18, Color.WHITE))
+        body.addView(text("$heading · ${plan.completed + 1}/${plan.points.size}\n${plan.label(point)}", 18, Color.WHITE))
         body.addView(button(l.t("Obre amb Waze", "Abrir con Waze", "Open in Waze")) {
-            openNextNavigation(point, maps = false)
+            openItinerary(plan, maps = false)
         })
         body.addView(button(l.t("Obre amb Google Maps", "Abrir con Google Maps", "Open in Google Maps")) {
-            openNextNavigation(point, maps = true)
+            openItinerary(plan, maps = true)
         })
-        val route = TripNavigation.mapsDirections(plan.remaining, browser = false)
-        if (plan.remaining.size > 1 && route != null) {
-            body.addView(button(l.t("Previsualitza les parades a Google Maps", "Previsualizar las paradas en Google Maps",
-                "Preview stops in Google Maps")) {
-                openNavigation("com.google.android.apps.maps", route, TripNavigation.mapsDirections(plan.remaining, browser = true))
-            })
-        }
+        chargerButton(plan, point)
         body.addView(button(l.t("Marca el punt com a completat", "Marcar el punto como completado", "Mark point complete")) {
             plans.save(plan.advance())
             showPage()
@@ -280,8 +276,67 @@ class MainActivity : Activity() {
             editNavigationPlan(plans, plan)
         })
         plan.remaining.drop(1).forEachIndexed { index, stop ->
-            body.addView(text("${plan.completed + index + 2}. $stop", 15, Color.WHITE))
+            body.addView(text("${plan.completed + index + 2}. ${plan.label(stop)}", 15, Color.WHITE))
+            chargerButton(plan, stop)
         }
+    }
+
+    private fun chargerButton(plan: NavigationPlan, point: String) {
+        val name = plan.chargerNames[point] ?: return
+        body.addView(button(l.t("Cerca el carregador a Google Maps", "Busca el cargador en Google Maps",
+            "Find charger in Google Maps")) { openCharger(point, name) })
+    }
+
+    private fun openCharger(point: String, name: String) {
+        openNavigation("com.google.android.apps.maps", TripNavigation.mapsCharger(point, name),
+            TripNavigation.mapsChargerWeb(point, name))
+    }
+
+    private fun openItinerary(plan: NavigationPlan, maps: Boolean) {
+        if (!maps) {
+            chooseNavigationLeg(plan, maps = false)
+            return
+        }
+        val mapsPackage = "com.google.android.apps.maps"
+        val directions = Uri.parse("https://www.google.com/maps/dir/?api=1")
+        val browser = Intent(Intent.ACTION_VIEW, directions).setPackage(mapsPackage).resolveActivity(packageManager) == null
+        val sections = TripNavigation.mapsSections(plan, browser)
+        if (sections.isNullOrEmpty()) {
+            chooseNavigationLeg(plan, maps = true)
+            return
+        }
+        fun open(section: TripNavigation.MapsSection) {
+            val webUrl = section.url.takeIf { section.stops.count() <= 4 }
+            openNavigation(mapsPackage, section.url, webUrl)
+        }
+        if (sections.size == 1) {
+            open(sections.single())
+            return
+        }
+        val labels = sections.mapIndexed { index, section ->
+            "${index + 1}. ${plan.label(plan.points[section.stops.last])}"
+        }
+        AlertDialog.Builder(this)
+            .setTitle(l.t("Tria una part de la ruta a Google Maps", "Elige una parte de la ruta en Google Maps",
+                "Choose a route section in Google Maps"))
+            .setItems(labels.toTypedArray()) { _, index -> open(sections[index]) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun chooseNavigationLeg(plan: NavigationPlan, maps: Boolean) {
+        val remaining = plan.remaining
+        if (remaining.size == 1) {
+            openNextNavigation(remaining.single(), maps)
+            return
+        }
+        val labels = remaining.mapIndexed { index, point -> "${plan.completed + index + 1}. ${plan.label(point)}" }
+        val navigator = if (maps) "Google Maps" else "Waze"
+        AlertDialog.Builder(this)
+            .setTitle(l.t("Tria un tram · $navigator", "Elige un tramo · $navigator", "Choose a leg · $navigator"))
+            .setItems(labels.toTypedArray()) { _, index -> openNextNavigation(remaining[index], maps) }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
     }
 
     private fun importRoutingMap(uri: Uri) {

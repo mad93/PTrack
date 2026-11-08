@@ -1,5 +1,10 @@
 # Validació
 
+## Exportació d’itineraris del planificador — 8/11/2026
+
+- Ha passat `testDebugUnitTest`. Les proves comproven l’ordre de les parades, la divisió dels enllaços de Google Maps segons els límits de l’app i del navegador, i la continuïtat entre les parts. També comproven que la cerca del carregador conserva el nom i la ubicació i que la ruta usa les coordenades del catàleg.
+- Queda pendent comprovar al Pixel que Google Maps obre totes les parades en ordre, que el selector de Waze obre cada tram i quines fitxes de carregadors retorna Google Maps.
+
 ## PTrack 0.2.5 al Pixel — 8/11/2026
 
 - Han passat les proves unitàries i s’ha compilat l’APK de depuració des del commit `74ec405c5f71` de `main`. L’APK `artifacts/ptrack-pixel-025-20261108/PTrack-0.2.5.apk` conserva el certificat de la 0.2.4. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `A6D5F5F8DB9DFA805883D1953E56F4A40E01FAC056EA34EFB43749D6897CE2A5`.

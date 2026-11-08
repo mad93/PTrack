@@ -34,7 +34,8 @@ internal class PlannerScreen(
     private val labels: Labels,
     private val importMap: () -> Unit,
     private val locate: () -> Unit,
-    private val navigate: (NavigationPlan, Boolean) -> Unit
+    private val navigate: (NavigationPlan, Boolean) -> Unit,
+    private val showCharger: (String, String) -> Unit
 ) {
     private val context = activity.applicationContext
     private val handler = Handler(Looper.getMainLooper())
@@ -563,6 +564,8 @@ internal class PlannerScreen(
                 selectStop(index)
             }.apply { isEnabled = !busy })
             if (stopSelected == index && !busy) {
+                results.addView(button(t("Cerca el carregador a Google Maps", "Busca el cargador en Google Maps",
+                    "Find charger in Google Maps")) { showCharger(charge.stop.point.toString(), charge.stop.name) })
                 results.addView(row(button(t("Salta la parada", "Salta la parada", "Skip stop")) { skip(plan, charge.stop) },
                     button(t("Busca alternatives", "Busca alternativas", "Find alternatives")) { searchReplacement(charge.stop) }))
                 proposedSkip?.let { preview ->
@@ -577,14 +580,16 @@ internal class PlannerScreen(
                 }
             }
         }
-        results.addView(text(t("Obre el pròxim punt amb", "Abre el siguiente punto con", "Open the next point with")))
+        results.addView(text(t("Obre l’itinerari amb", "Abre el itinerario con", "Open itinerary in")))
         results.addView(row(button("Google Maps") { open(plan, true) }.apply { isEnabled = !busy },
             button("Waze") { open(plan, false) }.apply { isEnabled = !busy }))
     }
 
     private fun open(plan: Plan, maps: Boolean) {
         val request = trip ?: return
-        navigate(NavigationPlan(plan.charges.map { it.stop.point.toString() } + request.destination.toString()), maps)
+        val stops = plan.charges.map { it.stop }
+        navigate(NavigationPlan(stops.map { it.point.toString() } + request.destination.toString(),
+            origin = request.origin.toString(), chargerNames = stops.associate { it.point.toString() to it.name }), maps)
     }
 
     private fun invalidateRoutes(fit: Boolean = false) {

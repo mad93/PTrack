@@ -105,11 +105,12 @@ class PTrackCarScreen private constructor(context: CarContext, private val detai
         val title = (if (details) "Trajecte" else "PTRACK") + if (vehicle.simulation) " · SIMULACIÓ" else ""
         if (details) {
             val items = ItemList.Builder()
-            plans.read()?.next?.let { point ->
+            val plan = plans.read()
+            plan?.next?.let { point ->
                 val labels = Labels(carContext)
                 items.addItem(Row.Builder()
                     .setTitle(labels.t("Navega al pròxim punt", "Navega al siguiente punto", "Navigate to next point"))
-                    .addText(point)
+                    .addText(plan.label(point))
                     .setOnClickListener(ParkedOnlyOnClickListener.create(::navigateToNextPoint))
                     .build())
             }

@@ -12,12 +12,16 @@ internal class NavigationPlanStore(context: Context) {
         return runCatching {
             val json = JSONObject(stored)
             val points = json.getJSONArray("points")
-            NavigationPlan(List(points.length()) { points.getString(it) }, json.getInt("completed"))
+            val chargers = json.optJSONObject("chargerNames")
+            NavigationPlan(List(points.length()) { points.getString(it) }, json.getInt("completed"),
+                json.optString("origin").ifEmpty { null },
+                chargers?.keys()?.asSequence()?.associateWith { chargers.getString(it) }.orEmpty())
         }.getOrNull()
     }
 
     fun save(plan: NavigationPlan) {
         val json = JSONObject().put("points", JSONArray(plan.points)).put("completed", plan.completed)
+            .put("origin", plan.origin).put("chargerNames", JSONObject(plan.chargerNames))
         prefs.edit().putString(PLAN, json.toString()).apply()
     }
 
