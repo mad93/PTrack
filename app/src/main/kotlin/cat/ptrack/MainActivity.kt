@@ -18,15 +18,20 @@ import android.view.Gravity
 import android.view.View
 import android.widget.*
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
 import java.io.*
 import java.text.DateFormat
 import java.text.SimpleDateFormat
@@ -43,9 +48,10 @@ import java.util.concurrent.Executors
 class MainActivity : ComponentActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private val io = Executors.newSingleThreadExecutor()
-    private lateinit var l: Labels
+    private var labels by mutableStateOf<Labels?>(null)
+    private val l get() = checkNotNull(labels)
     private lateinit var store: Store
-    private lateinit var root: LinearLayout
+    private lateinit var scroll: ScrollView
     private lateinit var body: LinearLayout
     private var liveState by mutableStateOf<LiveUiState?>(null)
     private var exportId = -1L
@@ -60,12 +66,12 @@ class MainActivity : ComponentActivity() {
     private var importingMap = false
     private var calendarMonth = YearMonth.now()
     private var annualCalendar = false
-    private var selectedDay: LocalDate? = null
-    private var openedTrip: Long? = null
+    private var selectedDay by mutableStateOf<LocalDate?>(null)
+    private var openedTrip by mutableStateOf<Long?>(null)
     private var allVehicles = false
     private lateinit var shownVehicleId: String
     private var choosingObdProfile = false
-    private var page = 0
+    private var page by mutableStateOf(0)
     private var pendingAssociation: String? = null
     private val prefs get() = getSharedPreferences("settings", 0)
     private val syncListener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
@@ -106,7 +112,8 @@ class MainActivity : ComponentActivity() {
             pendingAssociation = state.getString("pendingAssociation")
         }
         receiveObdChoice(intent)
-        l = Labels(this); build()
+        labels = Labels(this)
+        build()
         if (prefs.getBoolean("auto", false)) observeAutomaticDevices(true)
     }
     override fun onStart() {
@@ -172,47 +179,60 @@ class MainActivity : ComponentActivity() {
     private fun button(label: String, action: () -> Unit) = Button(this).apply {
         text = label; isAllCaps = false; setOnClickListener { action() }
     }
-    @Suppress("DEPRECATION")
     private fun build() {
-        l = Labels(this)
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setBackgroundColor(0xFF0A211C.toInt()) }
-        ViewCompat.setOnApplyWindowInsetsListener(root) { view, insets ->
-            val safe = insets.getInsets(WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout())
-            view.setPadding(dp(14) + safe.left, dp(12) + safe.top, dp(14) + safe.right, safe.bottom)
-            insets
+        enableEdgeToEdge()
+        scroll = ScrollView(this).apply {
+            setPadding(dp(14), 0, dp(14), 0)
         }
-        window.statusBarColor = 0xFF0A211C.toInt(); window.navigationBarColor = 0xFF0A211C.toInt(); setContentView(root)
-        ViewCompat.requestApplyInsets(root)
-        val header = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
-        header.addView(text("PTrack", 30, 0xFFBCF46A.toInt()), LinearLayout.LayoutParams(0, -2, 1f))
-        header.addView(ImageButton(this).apply {
-            setImageResource(R.drawable.ic_settings)
-            contentDescription = l.t("Configuració", "Ajustes", "Settings")
-            setOnClickListener { page = 2; showPage() }
-        }, LinearLayout.LayoutParams(dp(48), dp(48)))
-        root.addView(header)
-        val tabs = LinearLayout(this)
-        val tabsByPage = listOf(0 to l.t("En directe", "En directo", "Live"),
-            1 to l.t("Viatges", "Viajes", "Trips"), 3 to l.t("Planificador", "Planificador", "Planner"))
-        for ((target, name) in tabsByPage) tabs.addView(button(name) {
-            page = target
-            selectedDay = null; openedTrip = null
-            if (page == 1 && !RecordingService.running) io.execute {
-                store.recover()
-                runOnUiThread { if (page == 1 && openedTrip == null && !isDestroyed) showPage() }
-            }
-            showPage()
-        }, LinearLayout.LayoutParams(0, dp(48), 1f))
-        root.addView(tabs)
-        val scroll = ScrollView(this)
         body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        scroll.addView(body); root.addView(scroll, LinearLayout.LayoutParams(-1, 0, 1f))
-        val buildInfo = text("PTrack ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}" +
+        scroll.addView(body)
+        showPage()
+
+        val buildInfo = "PTrack ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · ${BuildConfig.BUILD_TYPE}" +
             " · Android Auto " + (if (BuildConfig.CAR_ENABLED) "experimental" else "—") + "\n" +
-            "${BuildConfig.SOURCE_BRANCH} @ ${BuildConfig.SOURCE_COMMIT} · ${BuildConfig.SOURCE_STATE}\nBuild UTC: ${BuildConfig.BUILD_TIME_UTC}", 11, 0xFF9DB5AA.toInt())
-        buildInfo.setTextIsSelectable(true); root.addView(buildInfo); showPage()
+            "${BuildConfig.SOURCE_BRANCH} @ ${BuildConfig.SOURCE_COMMIT} · ${BuildConfig.SOURCE_STATE}\nBuild UTC: ${BuildConfig.BUILD_TIME_UTC}"
+
+        setContent {
+            BackHandler(
+                enabled = page == Destination.SETTINGS.id ||
+                    (page == Destination.TRIPS.id && (openedTrip != null || selectedDay != null)),
+                onBack = ::goBack
+            )
+            PTrackTheme {
+                val background = if (page == Destination.LIVE.id) {
+                    MaterialTheme.colorScheme.background.toArgb()
+                } else {
+                    0xFF0A211C.toInt()
+                }
+                PTrackScaffold(page, l, buildInfo, ::selectDestination) {
+                    AndroidView(
+                        factory = { scroll },
+                        modifier = Modifier.fillMaxSize(),
+                        update = { it.setBackgroundColor(background) }
+                    )
+                }
+            }
+        }
     }
+
+    private fun selectDestination(destination: Destination) {
+        page = destination.id
+        if (destination != Destination.SETTINGS) {
+            selectedDay = null
+            openedTrip = null
+        }
+        if (destination == Destination.TRIPS && !RecordingService.running) {
+            io.execute {
+                store.recover()
+                runOnUiThread {
+                    if (page == Destination.TRIPS.id && openedTrip == null && !isDestroyed) showPage()
+                }
+            }
+        }
+        showPage()
+        scroll.scrollTo(0, 0)
+    }
+
     private fun showPage() {
         if (page != 3) plannerScreen?.cancelLocation()
         body.removeAllViews()
@@ -792,7 +812,9 @@ class MainActivity : ComponentActivity() {
                             screen.close()
                         }
                         plannerScreen = null
-                        build()
+                        labels = Labels(this@MainActivity)
+                        showPage()
+                        scroll.scrollTo(0, 0)
                     }
                 }
             }
@@ -985,13 +1007,11 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun historyReset() { openedTrip = null; showPage() }
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    override fun onBackPressed() {
+    private fun goBack() {
         when {
             page == 1 && openedTrip != null -> historyReset()
             page == 1 && selectedDay != null -> { selectedDay = null; showPage() }
             page == 2 -> { page = 0; showPage() }
-            else -> super.onBackPressed()
         }
     }
     private fun setAutomaticRecording(enabled: Boolean) {

@@ -1,5 +1,11 @@
 # Validació
 
+## Navegació adaptativa amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries i s’han compilat les proves instrumentades i l’APK de depuració a `codex/nou-look-compose`.
+- El renderitzador de Compose ha generat tres captures d’En directe amb dades simulades. Les dues de 393 dp mostren la barra inferior en tema clar i fosc. La de 1.024 dp mostra la barra lateral i les accions d’OBD en paral·lel. Captures a `artifacts/compose-navigation-previews/`.
+- Queda pendent la comprovació al Pixel de la navegació tàctil, Enrere, el teclat al planificador i els fluxos d’OBD.
+
 ## En directe amb Compose — 8/11/2026
 
 - A la branca `codex/nou-look-compose` han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.

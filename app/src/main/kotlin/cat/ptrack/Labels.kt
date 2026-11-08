@@ -4,8 +4,11 @@ import android.content.Context
 import java.util.Locale
 
 /** All UI/report copy uses the app locale; Catalan is the initial choice. */
-class Labels(context: Context) {
-    private val lang = context.getSharedPreferences("settings", 0).getString("lang", "ca") ?: "ca"
+class Labels internal constructor(private val lang: String) {
+    constructor(context: Context) : this(
+        context.getSharedPreferences("settings", 0).getString("lang", "ca") ?: "ca"
+    )
+
     val locale: Locale = Locale.forLanguageTag(lang)
     fun t(ca: String, es: String, en: String): String = when (lang) { "es" -> es; "en" -> en; else -> ca }
     fun n(value: Double, places: Int): String = if (value.isFinite()) String.format(locale, "%.${places}f", value) else "—"

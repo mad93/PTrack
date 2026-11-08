@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -69,11 +70,16 @@ internal fun LiveScreen(state: LiveUiState, labels: Labels, onConnect: () -> Uni
                 PowerMetrics(state, labels)
             }
 
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Button(onClick = onConnect, modifier = Modifier.fillMaxWidth()) {
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+                maxItemsInEachRow = if (wide) 2 else 1
+            ) {
+                Button(onClick = onConnect, modifier = Modifier.weight(1f)) {
                     Text(labels.t("Connecta OBD", "Conectar OBD", "Connect OBD"))
                 }
-                OutlinedButton(onClick = onStop, modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = onStop, modifier = Modifier.weight(1f)) {
                     Text(labels.t("Atura i desa el viatge", "Detener y guardar viaje", "Stop and save trip"))
                 }
             }
