@@ -59,7 +59,8 @@ class MainActivity : ComponentActivity() {
     private var backupDate: TextView? = null
     private var chargingStatus: TextView? = null
     private var chargingRefresh: Button? = null
-    private var plannerScreen: PlannerScreen? = null
+    private var plannerScreen by mutableStateOf<PlannerScreen?>(null)
+    private var savedPlannerItinerary by mutableStateOf<NavigationPlan?>(null)
     private var started = false
     private var resumed = false
     private var importingMap = false
@@ -200,7 +201,8 @@ class MainActivity : ComponentActivity() {
                 onBack = ::goBack
             )
             PTrackTheme {
-                val background = if (page == Destination.LIVE.id || page == Destination.TRIPS.id) {
+                val usesLegacyBody = page == Destination.LIVE.id || page == Destination.SETTINGS.id
+                val background = if (page != Destination.SETTINGS.id) {
                     MaterialTheme.colorScheme.background.toArgb()
                 } else {
                     0xFF0A211C.toInt()
@@ -211,7 +213,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.fillMaxSize(),
                         update = {
                             it.setBackgroundColor(background)
-                            it.visibility = if (page == Destination.TRIPS.id) View.INVISIBLE else View.VISIBLE
+                            it.visibility = if (usesLegacyBody) View.VISIBLE else View.INVISIBLE
                         }
                     )
                     if (page == Destination.TRIPS.id) {
@@ -235,6 +237,21 @@ class MainActivity : ComponentActivity() {
                             onTrip = { openedTrip = it },
                             onExport = ::export
                         )
+                    } else if (page == Destination.PLANNER.id) {
+                        plannerScreen?.Content {
+                            val store = NavigationPlanStore(this@MainActivity)
+                            val plan = savedPlannerItinerary
+                            SavedPlannerItinerary(
+                                plan, l,
+                                onEdit = { editNavigationPlan(store, plan?.takeIf { it.next != null }) },
+                                onOpen = { maps -> plan?.let { openItinerary(it, maps) } },
+                                onCharger = ::openCharger,
+                                onAdvance = {
+                                    plan?.let { store.save(it.advance()) }
+                                    savedPlannerItinerary = store.read()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -260,7 +277,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun showPage() {
-        if (page != 3) plannerScreen?.cancelLocation()
+        if (page != 3) plannerScreen?.leave()
         body.removeAllViews()
         chargingStatus = null
         chargingRefresh = null
@@ -273,8 +290,7 @@ class MainActivity : ComponentActivity() {
     }
     private fun planner() {
         val plans = NavigationPlanStore(this)
-        val plan = plans.read()
-        val point = plan?.next
+        savedPlannerItinerary = plans.read()
         val screen = plannerScreen ?: PlannerScreen(this, l, importMap = {
             startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
                 .setType("*/*"), OFFLINE_MAP_IMPORT)
@@ -284,52 +300,15 @@ class MainActivity : ComponentActivity() {
                 it.points == draft.points && it.next != null && (it.origin == null || it.origin == draft.origin)
             }?.let { draft.copy(completed = it.completed) } ?: draft
             plans.save(itinerary)
-            showPage()
+            savedPlannerItinerary = itinerary
             openItinerary(itinerary, maps)
         }, showCharger = ::openCharger).also {
             plannerScreen = it
             if (started) it.mapView.onStart()
             if (resumed) it.mapView.onResume()
         }
-        body.addView(screen.view)
         screen.vehicleChanged(store.vehicles.active())
         screen.mapStatus(OfflineValhalla.installed(this), importingMap)
-        body.addView(text(l.t("Itinerari desat", "Itinerario guardado", "Saved itinerary"), 20, Color.WHITE))
-        if (plan == null || point == null) {
-            val message = if (plan == null) l.t("Afegeix les parades i el destí del viatge.",
-                "Añade las paradas y el destino del viaje.", "Add the stops and destination for your trip.")
-            else l.t("Itinerari completat.", "Itinerario completado.", "Itinerary complete.")
-            body.addView(text(message, 16, Color.WHITE))
-            body.addView(button(l.t("Nou itinerari", "Nuevo itinerario", "New itinerary")) { editNavigationPlan(plans, null) })
-            return
-        }
-        val heading = if (plan.remaining.size == 1) l.t("Destí", "Destino", "Destination")
-            else l.t("Pròxima parada", "Próxima parada", "Next stop")
-        body.addView(text("$heading · ${plan.completed + 1}/${plan.points.size}\n${plan.label(point)}", 18, Color.WHITE))
-        body.addView(button(l.t("Obre amb Waze", "Abrir con Waze", "Open in Waze")) {
-            openItinerary(plan, maps = false)
-        })
-        body.addView(button(l.t("Obre amb Google Maps", "Abrir con Google Maps", "Open in Google Maps")) {
-            openItinerary(plan, maps = true)
-        })
-        chargerButton(plan, point)
-        body.addView(button(l.t("Marca el punt com a completat", "Marcar el punto como completado", "Mark point complete")) {
-            plans.save(plan.advance())
-            showPage()
-        })
-        body.addView(button(l.t("Edita els punts pendents", "Editar los puntos pendientes", "Edit remaining points")) {
-            editNavigationPlan(plans, plan)
-        })
-        plan.remaining.drop(1).forEachIndexed { index, stop ->
-            body.addView(text("${plan.completed + index + 2}. ${plan.label(stop)}", 15, Color.WHITE))
-            chargerButton(plan, stop)
-        }
-    }
-
-    private fun chargerButton(plan: NavigationPlan, point: String) {
-        val name = plan.chargerNames[point] ?: return
-        body.addView(button(l.t("Cerca el carregador a Google Maps", "Busca el cargador en Google Maps",
-            "Find charger in Google Maps")) { openCharger(point, name) })
     }
 
     private fun openCharger(point: String, name: String) {

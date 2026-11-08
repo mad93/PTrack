@@ -1,5 +1,11 @@
 # Validació
 
+## Planificador amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.
+- S’han revisat dues previsualitzacions amb un mapa esquemàtic i una ruta fictícia. A 393 dp, el formulari i el mapa es veuen en una columna desplaçable. A 1.024 dp, el mapa queda al costat del formulari i del resum de ruta. Captures a `artifacts/compose-planner-previews/`.
+- Queda pendent comprovar al Pixel la cerca Photon i ICGC, els gestos i la selecció al mapa de MapLibre, la conservació de l’esborrany en rotar o redimensionar, els canvis de parada i l’obertura a Google Maps i Waze.
+
 ## Viatges amb Compose — 8/11/2026
 
 - Han passat les 32 proves unitàries, amb comprovacions del resum en català, castellà i anglès. S’han compilat l’APK de depuració i les proves instrumentades.
