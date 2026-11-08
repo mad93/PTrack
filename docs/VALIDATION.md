@@ -1,5 +1,12 @@
 # Validació
 
+## Configuració amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries. S’han compilat l’APK de depuració i les proves instrumentades.
+- `lintDebug` ha passat després de tractar la retirada del permís Bluetooth en llegir els dispositius aparellats. El selector avisa si manca el permís i la confirmació pot conservar l’adreça si el nom és inaccessible.
+- S’han revisat quatre previsualitzacions amb dades de mostra. Inclouen Configuració en català, castellà i anglès, la disposició en dues columnes a 1.024 dp, el text al 150% a 360 dp i l’editor de perfils. Captures a `artifacts/compose-settings-previews/`.
+- ADB no ha detectat cap dispositiu. Queda pendent la comprovació al Pixel de l’edició de perfils, les associacions Bluetooth, les còpies, el canvi d’idioma i TalkBack.
+
 ## Planificador amb Compose — 8/11/2026
 
 - Han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.
