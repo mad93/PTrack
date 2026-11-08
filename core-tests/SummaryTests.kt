@@ -44,6 +44,11 @@ class SummaryTests {
         source.status("missing"); check(source.snapshot().remaining(100).isNaN())
         near(Profile.Signal("energy", "6B4", "694", "D865", "[B4:B5]/64", "kWh", 0.0, 100.0).decode("62D8650800"), 32)
         check(TripSummaryText.lines(a, false).last().value == "No disponible")
+        check(TripSummaryText.lines(a, labels = Labels("ca")) == TripSummaryText.lines(a))
+        check(TripSummaryText.lines(a, labels = Labels("es")).first() == TripSummaryText.Line("Distancia", "1,00 km"))
+        val english = TripSummaryText.lines(a, allowRange = false, labels = Labels("en"))
+        check(english.first() == TripSummaryText.Line("Distance", "1.00 km"))
+        check(english.last().value == "Unavailable")
         check(TripSummaryText.sections(a, true).size == 5); check(TripSummaryText.sections(a, false)[4].first == "No disponible")
         println("PASS: $checks summary/gauge checks (units, peaks, endpoints, range quality, absence, schema roundtrip and zero-centred geometry)")
     }

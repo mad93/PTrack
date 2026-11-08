@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -35,12 +36,8 @@ import androidx.core.location.LocationManagerCompat
 import java.io.*
 import java.text.DateFormat
 import java.text.SimpleDateFormat
-import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.Executors
@@ -51,6 +48,8 @@ class MainActivity : ComponentActivity() {
     private var labels by mutableStateOf<Labels?>(null)
     private val l get() = checkNotNull(labels)
     private lateinit var store: Store
+    private lateinit var tripHistory: TripHistory
+    private var historyRevision by mutableStateOf(0)
     private lateinit var scroll: ScrollView
     private lateinit var body: LinearLayout
     private var liveState by mutableStateOf<LiveUiState?>(null)
@@ -64,11 +63,11 @@ class MainActivity : ComponentActivity() {
     private var started = false
     private var resumed = false
     private var importingMap = false
-    private var calendarMonth = YearMonth.now()
-    private var annualCalendar = false
+    private var calendarMonth by mutableStateOf(YearMonth.now())
+    private var annualCalendar by mutableStateOf(false)
     private var selectedDay by mutableStateOf<LocalDate?>(null)
     private var openedTrip by mutableStateOf<Long?>(null)
-    private var allVehicles = false
+    private var allVehicles by mutableStateOf(false)
     private lateinit var shownVehicleId: String
     private var choosingObdProfile = false
     private var page by mutableStateOf(0)
@@ -91,7 +90,8 @@ class MainActivity : ComponentActivity() {
                     VehicleTelemetry.LIVE.resetVehicle(vehicle.id)
                     RecordingService.state = if (vehicle.obdAddress == null) "unconfigured" else "disconnected"
                 }
-                if (page == 2 || (page == 1 && openedTrip == null)) showPage()
+                if (page == 1 && !allVehicles) openedTrip = null
+                if (page == 2 || page == 1) showPage()
             }
             shownVehicleId = vehicle.id
             if (page == 0) update(vehicle)
@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(state: Bundle?) {
         super.onCreate(state); store = Store(this)
+        tripHistory = TripHistory(store)
         shownVehicleId = store.vehicles.active().id
         if (state != null) {
             exportId = state.getLong("exportId", -1); exportType = state.getString("exportType"); page = state.getInt("page", 0)
@@ -199,7 +200,7 @@ class MainActivity : ComponentActivity() {
                 onBack = ::goBack
             )
             PTrackTheme {
-                val background = if (page == Destination.LIVE.id) {
+                val background = if (page == Destination.LIVE.id || page == Destination.TRIPS.id) {
                     MaterialTheme.colorScheme.background.toArgb()
                 } else {
                     0xFF0A211C.toInt()
@@ -208,8 +209,33 @@ class MainActivity : ComponentActivity() {
                     AndroidView(
                         factory = { scroll },
                         modifier = Modifier.fillMaxSize(),
-                        update = { it.setBackgroundColor(background) }
+                        update = {
+                            it.setBackgroundColor(background)
+                            it.visibility = if (page == Destination.TRIPS.id) View.INVISIBLE else View.VISIBLE
+                        }
                     )
+                    if (page == Destination.TRIPS.id) {
+                        val revision = historyRevision
+                        val vehicle = remember(revision) { store.vehicles.active() }
+                        TripsScreen(
+                            TripsSelection(calendarMonth, annualCalendar, selectedDay, openedTrip, allVehicles),
+                            vehicle, tripHistory, revision, l,
+                            onFilter = {
+                                allVehicles = it
+                                openedTrip = null
+                            },
+                            onPeriod = { month, annual ->
+                                calendarMonth = month
+                                annualCalendar = annual
+                            },
+                            onDay = {
+                                selectedDay = it
+                                openedTrip = null
+                            },
+                            onTrip = { openedTrip = it },
+                            onExport = ::export
+                        )
+                    }
                 }
             }
         }
@@ -240,7 +266,7 @@ class MainActivity : ComponentActivity() {
         chargingRefresh = null
         when (page) {
             0 -> live()
-            1 -> openedTrip?.let(::trip) ?: history()
+            1 -> historyRevision++
             3 -> planner()
             else -> settings()
         }
@@ -938,82 +964,14 @@ class MainActivity : ComponentActivity() {
             else DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, l.locale).format(Date(timestamp))
         return l.t("Darrera còpia desada", "Última copia guardada", "Last backup saved") + " · $date"
     }
-    private fun history() {
-        if (!allVehicles) body.addView(text(store.vehicles.active().label, 17, Color.WHITE))
-        body.addView(Switch(this).apply {
-            text = l.t("Tots els vehicles", "Todos los vehículos", "All vehicles")
-            setTextColor(Color.WHITE)
-            isChecked = allVehicles
-            setOnCheckedChangeListener { _, checked -> allVehicles = checked; showPage() }
-        })
-        val day = selectedDay
-        val zone = ZoneId.systemDefault()
-        if (day == null) {
-            val month = if (annualCalendar) calendarMonth.withMonth(1) else calendarMonth
-            val first = month.atDay(1)
-            val end = (if (annualCalendar) month.plusYears(1) else month.plusMonths(1)).atDay(1)
-            val counts = mutableMapOf<LocalDate, Int>()
-            tripsBetween(first, end, zone).use { rows ->
-                while (rows.moveToNext()) {
-                    val date = Instant.ofEpochMilli(rows.getLong(1)).atZone(zone).toLocalDate()
-                    counts[date] = (counts[date] ?: 0) + 1
-                }
-            }
-            body.addView(TripCalendar(this, l).apply {
-                render(calendarMonth, annualCalendar, counts, { target, annual ->
-                    calendarMonth = target; annualCalendar = annual; showPage()
-                }, { selectedDay = it; showPage() })
-            })
-            return
-        }
-        val date = day.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.FULL).withLocale(l.locale))
-        body.addView(text(date, 20, Color.WHITE))
-        body.addView(button(l.t("Torna al calendari", "Volver al calendario", "Back to calendar")) {
-            selectedDay = null; showPage()
-        })
-        var any = false
-        tripsBetween(day, day.plusDays(1), zone).use { c -> while (c.moveToNext()) {
-            any = true; val id = c.getLong(0); val demo = c.getInt(3) == 1; val state = c.getString(4)
-            var name = DateFormat.getTimeInstance(DateFormat.SHORT, l.locale).format(Date(c.getLong(1))) + " · #$id"
-            if (allVehicles) name += " · ${c.getString(5)}"
-            if (demo) name += " · " + l.t("SIMULACIÓ", "SIMULACIÓN", "SIMULATION")
-            if (state == "recording") name += " · " + l.t("en curs", "en curso", "recording")
-            if (state == "interrupted") name += " · " + l.t("interromput", "interrumpido", "interrupted")
-            body.addView(button(name) { trip(id) })
-        } }
-        if (!any) body.addView(text(l.t("Cap viatge aquest dia.", "Ningún viaje este día.", "No trips on this day."), 16, 0xFFB3C8BD.toInt()))
-    }
-    private fun tripsBetween(first: LocalDate, end: LocalDate, zone: ZoneId): Cursor = store.tripsBetween(
-        first.atStartOfDay(zone).toInstant().toEpochMilli(), end.atStartOfDay(zone).toInstant().toEpochMilli(),
-        if (allVehicles) null else store.vehicles.active().id
-    )
-    private fun trip(id: Long) {
-        openedTrip = id
-        body.removeAllViews(); body.addView(text(l.t("Carregant viatge…", "Cargando viaje…", "Loading trip…"), 17, Color.WHITE))
-        io.execute {
-            val stats = TripStats(); store.samples(id).forEach(stats::add)
-            val info = TripSummaryText.describe(store.summary(id)) + "\n" + l.t("Pujada / baixada GPS", "Ascenso / descenso GPS", "GPS ascent / descent") + ": " +
-                if (stats.hasAltitude) l.n(stats.ascent, 0) + " / " + l.n(stats.descent, 0) + " m" else "—"
-            runOnUiThread {
-                if (isFinishing || isDestroyed || page != 1 || openedTrip != id) return@runOnUiThread
-                body.removeAllViews()
-                val tripTitle = l.t("Viatge", "Viaje", "Trip") + " #$id · ${store.tripVehicle(id)}"
-                body.addView(text(if (store.isDemo(id)) "$tripTitle · " + l.t("SIMULACIÓ", "SIMULACIÓN", "SIMULATION") else tripTitle, 20, Color.WHITE))
-                body.addView(text(info, 18, 0xFFDBE8E0.toInt()))
-                body.addView(button(l.t("Exporta informe PDF", "Exportar informe PDF", "Export PDF report")) { export(id, "pdf") })
-                body.addView(button(l.t("Exporta registre complet JSON", "Exportar registro completo JSON", "Export full JSON log")) { export(id, "json") })
-                body.addView(button(l.t("Torna als viatges", "Volver a viajes", "Back to trips"), ::historyReset))
-            }
-        }
-    }
-    private fun historyReset() { openedTrip = null; showPage() }
     private fun goBack() {
         when {
-            page == 1 && openedTrip != null -> historyReset()
-            page == 1 && selectedDay != null -> { selectedDay = null; showPage() }
+            page == 1 && openedTrip != null -> openedTrip = null
+            page == 1 && selectedDay != null -> selectedDay = null
             page == 2 -> { page = 0; showPage() }
         }
     }
+
     private fun setAutomaticRecording(enabled: Boolean) {
         prefs.edit().putBoolean("auto", enabled).apply()
         observeAutomaticDevices(enabled)

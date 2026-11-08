@@ -1,5 +1,11 @@
 # Validació
 
+## Viatges amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries, amb comprovacions del resum en català, castellà i anglès. S’han compilat l’APK de depuració i les proves instrumentades.
+- S’han revisat cinc previsualitzacions amb dades simulades. A 393 dp s’han vist el calendari mensual i anual, la llista i el detall en pantalles separades. A 1.024 dp, la llista del dia i el detall seleccionat s’han vist costat per costat. Captures a `artifacts/compose-trips-previews/`.
+- Queda pendent comprovar al Pixel el filtre amb viatges reals, el gest Enrere i les exportacions PDF i JSON.
+
 ## Navegació adaptativa amb Compose — 8/11/2026
 
 - Han passat les 32 proves unitàries i s’han compilat les proves instrumentades i l’APK de depuració a `codex/nou-look-compose`.
