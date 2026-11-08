@@ -4,6 +4,8 @@ Revisió: 8/11/2026. **L'usuari confirma que PTrack Prova cotxe funciona al Peug
 
 ## Ús habitual i actualitzacions
 
+El 8/11/2026 a les 16:01 CET s’ha actualitzat la PTrack habitual a **0.2.5 (7)** amb KingInstaller 2.5 i Shizuku 13.6.0, després de l’anàlisi autoritzada de Play Protect. S’han verificat l’origen d’instal·lació, el servei d’Android Auto, els tres viatges previs i els controls d’ubicació i d’intercanvi del planificador. Shizuku s’ha aturat. Queda pendent la prova al Peugeot. [Registre de validació](VALIDATION.md#ptrack-025-al-pixel--8112026)
+
 El 8/11/2026 a les 10:42 CET s’ha actualitzat la PTrack habitual a **0.2.4 (6)**, amb els perfils de vehicle. KingInstaller i Shizuku han completat l’actualització després de l’anàlisi autoritzada de Play Protect. S’han verificat l’origen, el servei d’Android Auto i el perfil e-2008 amb els tres viatges previs al calendari. Shizuku s’ha aturat. Queda pendent la prova al Peugeot. [Registre de validació](VALIDATION.md#ptrack-024-al-pixel--8112026)
 
 El 8/11/2026 a les 02:34 CET s'ha actualitzat la PTrack habitual a **0.2.3 (5)** amb el mateix procediment de KingInstaller i Shizuku per corregir la selecció dels resultats del planificador. Play Protect ha completat l'anàlisi autoritzada. S'han verificat l'APK, l'origen, el servei, els viatges i el mapa nacional. Shizuku s'ha aturat. La prova al Peugeot queda pendent. [Registre de validació](VALIDATION.md#ptrack-023-al-pixel--8112026)

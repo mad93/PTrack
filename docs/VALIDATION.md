@@ -1,5 +1,11 @@
 # Validació
 
+## PTrack 0.2.5 al Pixel — 8/11/2026
+
+- Han passat les proves unitàries i s’ha compilat l’APK de depuració des del commit `74ec405c5f71` de `main`. L’APK `artifacts/ptrack-pixel-025-20261108/PTrack-0.2.5.apk` conserva el certificat de la 0.2.4. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `A6D5F5F8DB9DFA805883D1953E56F4A40E01FAC056EA34EFB43749D6897CE2A5`.
+- PTrack habitual (`cat.ptrack`) actualitzada a la **0.2.5 (7)** a les 16:01 CET amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha completat l’anàlisi autoritzada. L’instal·lador és `com.android.vending`, l’iniciador és `com.google.android.packageinstaller` i es resol el servei `cat.ptrack.car.PTrackCarAppService`. Shizuku s’ha aturat. Informe `artifacts/android-auto-car-check/20261108-160144-217/`.
+- Còpia prèvia exportada i verificada a Baixades (`PTrack-20261108-155504.ptrack.json.gz`). El perfil actiu e-2008 conserva els tres viatges previs. Al planificador, «La meva ubicació» ha omplert l’origen i el botó ⇅ l’ha mogut al destí. Queda pendent la prova al Peugeot amb Android Auto.
+
 ## Edició de perfils i potència màxima DC — 8/11/2026
 
 - Han passat `testDebugUnitTest` i `compileDebugAndroidTestKotlin`. La prova del càlcul cobreix el límit del vehicle als trams sense dades apreses i el límit del carregador quan té menys potència.
