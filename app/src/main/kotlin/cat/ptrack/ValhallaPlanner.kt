@@ -19,7 +19,8 @@ internal class ValhallaPlanner(
     private val engine: Valhalla,
     private val catalog: ChargingCatalog,
     val vehicle: PlanningEnergy,
-    private val dcProfile: DcChargeProfile
+    private val dcProfile: DcChargeProfile,
+    private val maxDcChargeKw: Double? = null
 ) {
     private class SearchLimit : IOException("Routing time limit")
     private val deadline = System.nanoTime() + 75_000_000_000L
@@ -84,7 +85,7 @@ internal class ValhallaPlanner(
                 val curve = ambient?.let { curves.getOrPut(it) { dcProfile.curve(it) } }.orEmpty()
                 ElectricRoutePlanner.ChargeConditions(ambient, curve)
             }, weatherDepartureMs = trip.departureMs.takeIf { dcProfile.hasData && weather.hasForecast(points) },
-            leg = leg)
+            maxDcChargeKw = maxDcChargeKw, leg = leg)
     }
 
     private fun road(from: Point, to: Point): Leg? {

@@ -14,11 +14,12 @@ import java.util.zip.GZIPOutputStream
 /** The column order in these lists is part of the backup format. */
 internal object TripBackup {
     private const val FORMAT = "PTrack trip backup"
-    private const val VERSION = 2
+    private const val VERSION = 3
     private val keyPattern = Regex("[0-9a-f]{32}")
     private val vehicleKeyPattern = Regex("[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}")
     private val tripColumns = listOf("start", "end", "demo", "status")
-    private val vehicleColumns = listOf("id", "name", "model", "capacity_kwh", "obd_address", "archived", "updated_at", "soh", "soh_at")
+    private val vehicleColumnsV2 = listOf("id", "name", "model", "capacity_kwh", "obd_address", "archived", "updated_at", "soh", "soh_at")
+    private val vehicleColumns = vehicleColumnsV2 + "max_dc_charge_kw"
     private val dcColumns = listOf("vehicle_id", "time", "session", "soc", "kw", "pack", "ambient")
     private val tables = linkedMapOf(
         "samples" to listOf("time", "soc", "voltage", "current", "speed", "lat", "lon", "altitude", "raw"),
@@ -122,7 +123,7 @@ internal object TripBackup {
             require(reader.nextName() == "initial_vehicle_id")
             val sourceInitial = reader.nextString()
             val placeholder = VehicleProfiles.unusedInitialId(db)
-            readVehicles(db, reader).also { ids ->
+            readVehicles(db, reader, version).also { ids ->
                 require(sourceInitial in ids)
                 if (placeholder != null && placeholder !in ids) VehicleProfiles.adoptInitial(db, placeholder, sourceInitial)
             }
@@ -174,12 +175,13 @@ internal object TripBackup {
         return count
     }
 
-    private fun readVehicles(db: SQLiteDatabase, reader: JsonReader): Set<String> {
+    private fun readVehicles(db: SQLiteDatabase, reader: JsonReader, version: Int): Set<String> {
         require(reader.nextName() == "vehicles")
         val ids = HashSet<String>()
+        val columns = if (version >= 3) vehicleColumns else vehicleColumnsV2
         reader.beginArray()
         while (reader.hasNext()) {
-            val row = readValues(reader, vehicleColumns)
+            val row = readValues(reader, columns)
             val id = row.getAsString("id")
             val name = row.getAsString("name")
             val model = row.getAsString("model")
@@ -189,11 +191,14 @@ internal object TripBackup {
             val updatedAt = row.getAsLong("updated_at")
             val soh = row.getAsDouble("soh")
             val sohAt = row.getAsLong("soh_at")
+            val maxDcChargeKw = row.getAsDouble("max_dc_charge_kw")
             require(vehicleKeyPattern.matches(id) && ids.add(id))
             require(name.isNotBlank() && name.length <= 80 && (model == null || model.length <= 80))
             require((capacity == null || capacity > 0) && (address == null || VehicleProfiles.validAddress(address)))
             require(archived in 0L..1L && updatedAt >= 0 && sohAt >= 0 && (soh == null || soh in 0.0..100.0))
-            VehicleProfiles.merge(db, VehicleProfile(id, name, model, capacity, address, archived == 1L, updatedAt, soh, sohAt))
+            require(maxDcChargeKw == null || maxDcChargeKw > 0)
+            VehicleProfiles.merge(db, VehicleProfile(id, name, model, capacity, address, archived == 1L, updatedAt,
+                soh, sohAt, maxDcChargeKw), includesMaxDcCharge = version >= 3)
         }
         reader.endArray()
         return ids
@@ -258,7 +263,7 @@ internal object TripBackup {
     }
 
     private val nullableColumns = setOf("end", "soc", "voltage", "current", "speed", "lat", "lon", "altitude", "raw", "signal", "value",
-        "model", "capacity_kwh", "obd_address", "soh")
+        "model", "capacity_kwh", "obd_address", "soh", "max_dc_charge_kw")
 
     private fun checkRecording(automatic: Boolean) {
         val recording = if (automatic) RecordingService.activeTrip >= 0 else RecordingService.running

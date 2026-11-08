@@ -172,7 +172,7 @@ class SmokeInstrumentation : Instrumentation() {
             db.version = 2
         }
         Store(context, name).use { upgraded ->
-            verify(upgraded.readableDatabase.version == 6, "v2 to v6")
+            verify(upgraded.readableDatabase.version == 7, "v2 to v7")
             verify(upgraded.samples(id).size == 61 && upgraded.samples(id).first().raw == "preserved-v2", "v2 samples intact")
             upgraded.finish(id)
             upgraded.readableDatabase.rawQuery("SELECT version FROM trip_summaries WHERE trip=?", arrayOf(id.toString())).use {
@@ -251,7 +251,7 @@ class SmokeInstrumentation : Instrumentation() {
         }
         Store(context, name).use { store ->
             val db = store.writableDatabase
-            verify(db.version == 6, "v1 to v6")
+            verify(db.version == 7, "v1 to v7")
             db.rawQuery("SELECT soc,raw FROM samples WHERE trip=1", null).use { verify(it.moveToFirst() && it.isNull(0) && it.getString(1) == "preserve-null", "Migration preserves samples and SQL NULL") }
             db.rawQuery("SELECT raw FROM readings", null).use { verify(it.moveToFirst() && it.getString(0) == "preserve-reading", "Migration preserves readings") }
             for (t in 0 until 5) {
@@ -296,7 +296,8 @@ class SmokeInstrumentation : Instrumentation() {
         val automatic = File.createTempFile("ptrack-smoke-auto-", ".gz", context.cacheDir)
         val truncated = File.createTempFile("ptrack-smoke-truncated-", ".gz", context.cacheDir)
         val legacy = File.createTempFile("ptrack-smoke-legacy-", ".gz", context.cacheDir)
-        val vehicle = VehicleProfile(VehicleProfiles.newId(), "Second e-2008", "e-2008", 52.0, "12:34:56:78:90:AB")
+        val vehicle = VehicleProfile(VehicleProfiles.newId(), "Second e-2008", "e-2008", 52.0, "12:34:56:78:90:AB",
+            maxDcChargeKw = 100.0)
         try {
             GZIPOutputStream(legacy.outputStream()).bufferedWriter().use {
                 it.write("""{"format":"PTrack trip backup","version":1,"trips":[["00000000000000000000000000000001",[1000,2000,0,"complete"],[],[],[]]]}""")
@@ -342,8 +343,9 @@ class SmokeInstrumentation : Instrumentation() {
                 verify(TripBackup.read(target, backup) == 0, "Repeat import does not duplicate")
                 target.trips().use { verify(it.count == 3, "Keep existing trip despite conflicting local ID") }
                 verify(target.vehicles.matches(vehicle.obdAddress!!.lowercase()).single().let {
-                    it.id == vehicle.id && it.name == "Renamed e-2008" && it.soh == 86.0
-                }, "Restore profile, MAC, and SOH")
+                    it.id == vehicle.id && it.name == "Renamed e-2008" && it.soh == 86.0 &&
+                        it.maxDcChargeKw == vehicle.maxDcChargeKw
+                }, "Restore profile, MAC, SOH, and maximum DC power")
                 target.tripsBetween(0, Long.MAX_VALUE, vehicle.id).use { verify(it.count == 2, "Restored trips scoped to their vehicle") }
                 verify(target.dcChargeProfile(vehicle.id).curve(19.0)[10] == 83.0 && !target.dcChargeProfile().hasData,
                     "Charge learning scoped to restored vehicle")

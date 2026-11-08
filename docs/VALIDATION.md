@@ -1,5 +1,10 @@
 # Validació
 
+## Edició de perfils i potència màxima DC — 8/11/2026
+
+- Han passat `testDebugUnitTest` i `compileDebugAndroidTestKotlin`. La prova del càlcul cobreix el límit del vehicle als trams sense dades apreses i el límit del carregador quan té menys potència.
+- Una comprovació local amb SQLite ha confirmat que la migració v6 a v7 conserva les dades del perfil i deixa la potència màxima DC buida. La comprovació visual del formulari i les proves instrumentades queden pendents en Android.
+
 ## PTrack 0.2.4 al Pixel — 8/11/2026
 
 - S’han executat les 28 proves unitàries i s’han compilat les proves instrumentades i l’APK de depuració des del commit `26d7084b8ee5` de `main`. L’APK `artifacts/ptrack-pixel-024-20261108/PTrack-0.2.4.apk` conserva el certificat de la 0.2.3. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `9DDC1DE2DD1305FD757A387781BCCA15215549620AC8FE0FEDD8C98A3C69E9D0`.

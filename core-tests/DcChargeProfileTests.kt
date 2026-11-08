@@ -40,6 +40,16 @@ class DcChargeProfileTests {
         assertFalse(fallback.learned)
     }
 
+    @Test fun capsOnlyUnlearnedChargingAtTheVehicleMaximum() {
+        val mixed = DcChargeProfile.duration(37.5, 42.5, 50.0, 150.0, mapOf(15 to 100.0), 50.0)
+        assertEquals(9.0, mixed.minutes, .0001)
+        assertTrue(mixed.learned)
+
+        val slowerStation = DcChargeProfile.duration(20.0, 25.0, 50.0, 30.0, emptyMap(), 50.0)
+        assertEquals(10.0, slowerStation.minutes, .0001)
+        assertFalse(slowerStation.learned)
+    }
+
     @Test fun estimatesLaterWeatherAfterPreviousChargeAndConnectionTime() {
         val points = (0..3).map { Point(41.0, it.toDouble()) }
         val stops = points.subList(1, 3).map { Stop(it, it.toString(), 100.0) }

@@ -36,15 +36,16 @@ internal class DcChargeProfile(samples: List<Observation>) {
         fun isDc(gridVoltage: Double) = gridVoltage in 0.0..5.0
 
         fun duration(start: Double, target: Double, capacity: Double, stopKw: Double,
-            curve: Map<Int, Double>): Estimate {
+            curve: Map<Int, Double>, maxDcChargeKw: Double? = null): Estimate {
             var minutes = 0.0
             var learned = false
+            val referenceKw = min(stopKw, maxDcChargeKw ?: stopKw)
             for (bin in 0 until 20) {
                 val kwh = min(target, capacity * ((bin + 1) / 20.0)) -
                     maxOf(start, capacity * (bin / 20.0))
                 if (kwh <= 0) continue
                 val observed = curve[bin]
-                val kw = observed?.let { min(it, stopKw) } ?: (stopKw * if (bin >= 16) .4 else 1.0)
+                val kw = observed?.let { min(it, stopKw) } ?: (referenceKw * if (bin >= 16) .4 else 1.0)
                 minutes += 60 * kwh / kw
                 learned = learned || observed != null
             }

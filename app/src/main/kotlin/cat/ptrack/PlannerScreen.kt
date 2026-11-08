@@ -159,7 +159,8 @@ internal class PlannerScreen(
         val previous = activeVehicle
         activeVehicle = vehicle
         vehicleName.text = vehicle.label
-        if (previous?.id == vehicle.id && previous.capacityKwh == vehicle.capacityKwh) return
+        if (previous?.id == vehicle.id && previous.capacityKwh == vehicle.capacityKwh &&
+            previous.maxDcChargeKw == vehicle.maxDcChargeKw) return
         val hadRoute = trip != null || busy
         if (previous?.id != vehicle.id) manualSoc = false
         invalidateRoutes()
@@ -399,7 +400,9 @@ internal class PlannerScreen(
                         it.dcChargeProfile(vehicle.id)
                 }
                 ChargingCatalog(context).use { catalog ->
-                    OfflineValhalla.withEngine(context) { engine -> ValhallaPlanner(engine, catalog, profile, chargeProfile).work() }
+                    OfflineValhalla.withEngine(context) { engine ->
+                        ValhallaPlanner(engine, catalog, profile, chargeProfile, vehicle.maxDcChargeKw).work()
+                    }
                 }
             }
             handler.post {

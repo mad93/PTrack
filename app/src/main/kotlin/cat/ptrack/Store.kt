@@ -8,7 +8,7 @@ import android.database.sqlite.SQLiteOpenHelper
 import org.json.JSONException
 import org.json.JSONObject
 
-class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(context, name, null, 6) {
+class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOpenHelper(context, name, null, 7) {
     internal val vehicles = VehicleProfiles(this)
     init { setWriteAheadLoggingEnabled(true) }
     override fun onCreate(db: SQLiteDatabase) {
@@ -27,6 +27,7 @@ class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOp
         if (oldVersion < 4) backupSchema(db)
         if (oldVersion < 5) dcChargeSchema(db)
         if (oldVersion < 6) vehicleSchema(db)
+        else if (oldVersion < 7) db.execSQL("ALTER TABLE vehicles ADD COLUMN max_dc_charge_kw REAL")
     }
     private fun vehicleSchema(db: SQLiteDatabase) {
         val initialId = VehicleProfiles.createSchema(db, context.getSharedPreferences("settings", 0).getString("address", null))

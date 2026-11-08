@@ -624,8 +624,13 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(20), 0, dp(20), 0)
         }
-        fun field(hint: String, value: String?) = EditText(this).apply {
-            this.hint = hint
+        fun field(label: String, value: String?) = EditText(this).apply field@{
+            id = View.generateViewId()
+            fields.addView(TextView(this@MainActivity).apply {
+                text = label
+                labelFor = this@field.id
+                setPadding(0, dp(8), 0, 0)
+            })
             setSingleLine()
             setText(value.orEmpty())
             fields.addView(this)
@@ -636,8 +641,17 @@ class MainActivity : Activity() {
             vehicle?.capacityKwh?.toString()).apply {
             inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
+        val power = field(l.t("Potència màxima de càrrega DC (kW)", "Potencia máxima de carga DC (kW)", "Maximum DC charging power (kW)"),
+            vehicle?.maxDcChargeKw?.toString()).apply {
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER or android.text.InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        fields.addView(TextView(this).apply {
+            text = l.t("Opcional. Limita la potència estimada als trams de bateria sense corba de càrrega apresa.",
+                "Opcional. Limita la potencia estimada en los tramos de batería sin curva de carga aprendida.",
+                "Optional. Caps estimated power for battery levels without a learned charging curve.")
+        })
         val builder = AlertDialog.Builder(this).setTitle(l.t("Perfil de vehicle", "Perfil de vehículo", "Vehicle profile"))
-            .setView(fields).setNegativeButton(android.R.string.cancel, null)
+            .setView(ScrollView(this).apply { addView(fields) }).setNegativeButton(android.R.string.cancel, null)
             .setPositiveButton(l.t("Desa", "Guardar", "Save"), null)
         if (vehicle != null && vehicle.id != store.vehicles.active().id) {
             builder.setNeutralButton(if (vehicle.archived) l.t("Recupera", "Recuperar", "Restore")
@@ -653,6 +667,8 @@ class MainActivity : Activity() {
             val modelName = model.text.toString().trim().ifEmpty { null }
             val enteredCapacity = capacity.text.toString().trim().replace(',', '.')
             val kwh = enteredCapacity.toDoubleOrNull()
+            val enteredPower = power.text.toString().trim().replace(',', '.')
+            val kw = enteredPower.toDoubleOrNull()
             if (label.isEmpty() || label.length > 80) {
                 name.error = l.t("Escriu un nom d’1 a 80 caràcters", "Escribe un nombre de 1 a 80 caracteres", "Enter a name of 1–80 characters")
                 return@setOnClickListener
@@ -665,8 +681,12 @@ class MainActivity : Activity() {
                 capacity.error = l.t("Introdueix una capacitat positiva", "Introduce una capacidad positiva", "Enter a positive capacity")
                 return@setOnClickListener
             }
-            val saved = vehicle?.copy(name = label, model = modelName, capacityKwh = kwh)
-                ?: VehicleProfile(VehicleProfiles.newId(), label, modelName, kwh, null)
+            if (enteredPower.isNotEmpty() && (kw == null || !kw.isFinite() || kw <= 0)) {
+                power.error = l.t("Introdueix una potència positiva", "Introduce una potencia positiva", "Enter a positive power")
+                return@setOnClickListener
+            }
+            val saved = vehicle?.copy(name = label, model = modelName, capacityKwh = kwh, maxDcChargeKw = kw)
+                ?: VehicleProfile(VehicleProfiles.newId(), label, modelName, kwh, null, maxDcChargeKw = kw)
             saveVehicle(saved)
             if (vehicle == null) selectVehicle(saved)
             dialog.dismiss()

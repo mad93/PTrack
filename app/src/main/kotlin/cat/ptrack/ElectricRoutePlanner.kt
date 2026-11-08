@@ -37,6 +37,7 @@ internal object ElectricRoutePlanner {
         reserveAt: (Point) -> Double = { reservePercent },
         conditions: (Stop, Double) -> ChargeConditions = { _, _ -> ChargeConditions(null, emptyMap()) },
         weatherDepartureMs: Long? = null,
+        maxDcChargeKw: Double? = null,
         leg: (Point, Point) -> Leg?
     ): Plan? {
         val points = listOf(origin) + stops.map { it.point } + destination
@@ -54,7 +55,8 @@ internal object ElectricRoutePlanner {
                     (5..100 step 5).mapNotNull { percent ->
                         val target = capacity * percent / 100
                         if (target <= current.arrivalKwh) return@mapNotNull null
-                        val estimate = DcChargeProfile.duration(current.arrivalKwh, target, capacity, stop.powerKw, weather.curve)
+                        val estimate = DcChargeProfile.duration(current.arrivalKwh, target, capacity, stop.powerKw,
+                            weather.curve, maxDcChargeKw)
                         val charge = Charge(stop, current.arrivalKwh, target, estimate.minutes, current.totalMinutes,
                             weather.ambientC, estimate.learned)
                         current.copy(charges = current.charges + charge,

@@ -15,7 +15,8 @@ internal data class VehicleProfile(
     val archived: Boolean = false,
     val updatedAt: Long = 0,
     val soh: Double? = null,
-    val sohAt: Long = 0
+    val sohAt: Long = 0,
+    val maxDcChargeKw: Double? = null
 ) {
     val label get() = listOfNotNull(name, model?.takeUnless { it.equals(name, ignoreCase = true) }).joinToString(" · ")
 }
@@ -65,7 +66,7 @@ internal class VehicleProfiles(private val store: Store) {
     }
 
     companion object {
-        private const val COLUMNS = "id,name,model,capacity_kwh,obd_address,archived,updated_at,soh,soh_at"
+        private const val COLUMNS = "id,name,model,capacity_kwh,obd_address,archived,updated_at,soh,soh_at,max_dc_charge_kw"
         fun newId(): String = UUID.randomUUID().toString()
         fun normalize(address: String): String = address.trim().uppercase(Locale.ROOT)
         fun validAddress(address: String): Boolean = Regex("[0-9A-F]{2}(:[0-9A-F]{2}){5}").matches(address)
@@ -77,7 +78,7 @@ internal class VehicleProfiles(private val store: Store) {
         fun createSchema(db: SQLiteDatabase, legacyAddress: String?): String {
             db.execSQL("""CREATE TABLE vehicles(id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, model TEXT,
                 capacity_kwh REAL, obd_address TEXT, archived INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-                soh REAL, soh_at INTEGER NOT NULL DEFAULT 0)""")
+                soh REAL, soh_at INTEGER NOT NULL DEFAULT 0, max_dc_charge_kw REAL)""")
             db.execSQL("CREATE INDEX vehicle_obd ON vehicles(obd_address,archived)")
             db.execSQL("""CREATE TABLE vehicle_selection(id INTEGER PRIMARY KEY CHECK(id=1),
                 vehicle_id TEXT NOT NULL REFERENCES vehicles(id), initial_vehicle_id TEXT NOT NULL REFERENCES vehicles(id))""")
@@ -109,10 +110,11 @@ internal class VehicleProfiles(private val store: Store) {
             "SELECT $COLUMNS FROM vehicles ORDER BY archived,name COLLATE NOCASE,id", null
         ).use { rows -> buildList { while (rows.moveToNext()) add(fromRow(rows)) } }
 
-        fun merge(db: SQLiteDatabase, vehicle: VehicleProfile) {
+        fun merge(db: SQLiteDatabase, vehicle: VehicleProfile, includesMaxDcCharge: Boolean = true) {
             val values = ContentValues().apply {
                 put("name", vehicle.name); put("model", vehicle.model); put("capacity_kwh", vehicle.capacityKwh)
                 put("obd_address", vehicle.obdAddress); put("archived", vehicle.archived); put("updated_at", vehicle.updatedAt)
+                if (includesMaxDcCharge) put("max_dc_charge_kw", vehicle.maxDcChargeKw)
             }
             if (db.update("vehicles", values, "id=? AND updated_at<?",
                     arrayOf(vehicle.id, vehicle.updatedAt.toString())) == 0) {
@@ -136,6 +138,7 @@ internal class VehicleProfiles(private val store: Store) {
 
         private fun fromRow(row: Cursor) = VehicleProfile(row.getString(0), row.getString(1), row.getString(2),
             if (row.isNull(3)) null else row.getDouble(3), row.getString(4), row.getInt(5) != 0, row.getLong(6),
-            if (row.isNull(7)) null else row.getDouble(7), row.getLong(8))
+            if (row.isNull(7)) null else row.getDouble(7), row.getLong(8),
+            if (row.isNull(9)) null else row.getDouble(9))
     }
 }
