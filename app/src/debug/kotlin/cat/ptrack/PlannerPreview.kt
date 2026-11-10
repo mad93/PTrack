@@ -33,7 +33,7 @@ private fun PlannerPreview() {
         status = ""
     )
     PTrackTheme {
-        PTrackScaffold(Destination.PLANNER.id, labels, "PTrack · Previsualització", onDestination = {}) {
+        PTrackScaffold(Destination.PLANNER.id, labels, onDestination = {}) {
             PlannerLayout(
                 form = { PlannerForm(form, labels, onAction = {}) },
                 map = { PreviewMap(it) },

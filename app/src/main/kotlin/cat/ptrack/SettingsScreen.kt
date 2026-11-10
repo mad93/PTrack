@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
@@ -48,6 +49,7 @@ internal enum class SettingsAction {
 @Composable
 internal fun SettingsScreen(
     state: SettingsState,
+    buildInfo: String,
     labels: Labels,
     onAction: (SettingsAction) -> Unit,
     onAutomatic: (Boolean) -> Unit,
@@ -72,6 +74,7 @@ internal fun SettingsScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         ObdSettings(state, labels, onAction, onAutomatic)
                         ChargingSettings(state, labels, onAction)
+                        BuildInfoSettings(buildInfo, labels)
                     }
                 }
             } else {
@@ -80,6 +83,7 @@ internal fun SettingsScreen(
                 BackupSettings(state, labels, onAction)
                 ChargingSettings(state, labels, onAction)
                 AppSettings(labels, onAction, onLanguage)
+                BuildInfoSettings(buildInfo, labels)
             }
         }
     }
@@ -240,4 +244,17 @@ private fun SettingsButton(label: String, enabled: Boolean = true, onClick: () -
 @Composable
 private fun SettingsNote(value: String) {
     Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+@Composable
+private fun BuildInfoSettings(buildInfo: String, labels: Labels) {
+    SettingsPanel(labels.t("Versió i compilació", "Versión y compilación", "Version and build")) {
+        SelectionContainer {
+            Text(
+                buildInfo,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

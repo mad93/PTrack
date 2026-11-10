@@ -27,7 +27,7 @@ private fun LiveDashboardPreview() {
     )
 
     PTrackTheme {
-        PTrackScaffold(Destination.LIVE.id, labels, "PTrack · Previsualització", onDestination = {}) {
+        PTrackScaffold(Destination.LIVE.id, labels, onDestination = {}) {
             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
                 LiveScreen(sample, labels, onConnect = {}, onStop = {})
             }

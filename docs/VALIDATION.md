@@ -1,5 +1,17 @@
 # Validació
 
+## PTrack 0.2.8 al Pixel — 9/11/2026
+
+- Reubicació de la informació de compilació (`buildInfo`): retirada del peu fix general de `PTrackScaffold` i afegida com a plafó *«Versió i compilació»* a sota de tot a `SettingsScreen`.
+- Han passat `testDebugUnitTest` (32 proves unitàries) i `assembleDebug`. APK `artifacts/ptrack-pixel-028-20261109/PTrack-0.2.8.apk`, paquet `cat.ptrack`, versió 0.2.8 (10), conservant el certificat de depuració existent. SHA-256 local i transferit a `/sdcard/Download/PTrack-0.2.8.apk`: `57C123E5F3E540BBF7490DFAEB4E53EC5F918D63BC4AB7E11D3C75A8CE03D69B`.
+- Shizuku iniciat via ADB (`libshizuku.so`, PID 15618). KingInstaller obert al Pixel per procedir amb la instal·lació com a paquet `com.android.vending`.
+
+## Preparació de PTrack 0.2.7 per al Pixel — 9/11/2026
+
+- S’ha exportat i verificat una còpia amb els tres viatges a Baixades (`PTrack-20261108-235709.ptrack.json.gz`).
+- La compilació de depuració de `052319925513` a `codex/nou-look-compose` conserva el certificat de la 0.2.6. S’han executat les 32 proves unitàries durant la preparació i s’han compilat les proves instrumentades. L’APK copiada a Baixades coincideix amb la local. SHA-256 `D8A706EAEC6BBD994C7E3A35C9FCE5F1748E8E64EFFBC8E9D01D3A5DB5E04A77`.
+- KingInstaller 2.5 amb Shizuku 13.6.0 ha iniciat l’actualització. Play Protect demana autoritzar l’enviament de l’APK a Google per analitzar-la. L’última comprovació encara mostra PTrack 0.2.6 (8) instal·lada.
+
 ## Configuració amb Compose — 8/11/2026
 
 - Han passat les 32 proves unitàries. S’han compilat l’APK de depuració i les proves instrumentades.

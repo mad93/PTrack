@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -47,7 +46,6 @@ private val Tabs = listOf(Destination.LIVE, Destination.TRIPS, Destination.PLANN
 internal fun PTrackScaffold(
     page: Int,
     labels: Labels,
-    buildInfo: String,
     onDestination: (Destination) -> Unit,
     content: @Composable () -> Unit
 ) {
@@ -94,14 +92,6 @@ internal fun PTrackScaffold(
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) { content() }
-                SelectionContainer {
-                    Text(
-                        buildInfo,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = colors.onSurfaceVariant
-                    )
-                }
             }
         }
     }

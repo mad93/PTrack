@@ -24,7 +24,7 @@ private fun PreviewCalendar(annual: Boolean) {
     val month = YearMonth.from(Day)
     val counts = mapOf(month.atDay(3) to 1, Day to 3, month.atDay(12) to 1, month.atDay(24) to 2)
     PTrackTheme {
-        PTrackScaffold(Destination.TRIPS.id, PreviewLabels, "PTrack · Previsualització", onDestination = {}) {
+        PTrackScaffold(Destination.TRIPS.id, PreviewLabels, onDestination = {}) {
             TripsCalendarPane(
                 PreviewLabels,
                 filter = { VehicleFilter("Peugeot e-2008", false, PreviewLabels, onChange = {}) }
@@ -60,7 +60,7 @@ private fun PreviewDay(showDetail: Boolean) {
 
     PTrackTheme {
         val selection = sample.id.takeIf { showDetail }
-        PTrackScaffold(Destination.TRIPS.id, PreviewLabels, "PTrack · Previsualització", onDestination = {}) {
+        PTrackScaffold(Destination.TRIPS.id, PreviewLabels, onDestination = {}) {
             TripDayLayout(
                 selectedTrip = selection,
                 list = {

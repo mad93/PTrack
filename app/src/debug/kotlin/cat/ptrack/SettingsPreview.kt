@@ -37,9 +37,11 @@ private fun PreviewSettings(language: String, showEditor: Boolean = false) {
         chargingText = labels.t("Darrera actualització · 2.410 emplaçaments",
             "Última actualización · 2.410 ubicaciones", "Last update · 2,410 sites")
     )
+    val sampleBuildInfo = "PTrack 0.2.7 (9) · debug · Android Auto experimental\n" +
+        "codex/nou-look-compose @ 1234567 · clean\nBuild UTC: 2026-11-09T20:00:00Z"
     PTrackTheme {
-        PTrackScaffold(Destination.SETTINGS.id, labels, "PTrack · Previsualització", onDestination = {}) {
-            SettingsScreen(settings, labels, onAction = {}, onAutomatic = {}, onLanguage = {})
+        PTrackScaffold(Destination.SETTINGS.id, labels, onDestination = {}) {
+            SettingsScreen(settings, sampleBuildInfo, labels, onAction = {}, onAutomatic = {}, onLanguage = {})
             if (showEditor) {
                 VehicleEditor(VehicleEditorRequest(vehicle, canArchive = false), labels,
                     onDismiss = {}, onSave = {}, onArchive = {})

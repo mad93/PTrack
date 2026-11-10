@@ -187,7 +187,7 @@ class MainActivity : ComponentActivity() {
                 onBack = ::goBack
             )
             PTrackTheme {
-                PTrackScaffold(page, l, buildInfo, ::selectDestination) {
+                PTrackScaffold(page, l, ::selectDestination) {
                     if (page == Destination.LIVE.id) {
                         liveState?.let { state ->
                             Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
@@ -232,7 +232,7 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         settingsState?.let { state ->
-                            SettingsScreen(state, l, ::settingsAction, ::setAutomaticRecording, ::changeLanguage)
+                            SettingsScreen(state, buildInfo, l, ::settingsAction, ::setAutomaticRecording, ::changeLanguage)
                         }
                         vehicleEditor?.let { request ->
                             VehicleEditor(request, l, onDismiss = { vehicleEditor = null },
