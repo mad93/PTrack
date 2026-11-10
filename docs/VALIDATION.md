@@ -1,5 +1,11 @@
 # Validació
 
+## PTrack 0.2.9 al Pixel — 10/11/2026
+
+- L’última lectura vàlida de kWh es manté fins a 60 s mentre hi ha dades recents del vehicle. Una lectura d’energia invàlida conserva el valor i el seu temps original.
+- Han passat les 32 proves de `testDebugUnitTest` i `assembleDebug` des de `main` (`b49e86917f07`). L’APK `artifacts/ptrack-pixel-029-20261110/PTrack-0.2.9.apk` és de `cat.ptrack` 0.2.9 (11) i conserva el certificat de la 0.2.8. SHA-256 local i al Pixel: `CCA2CB4496F9F5B7C858B3DEA4EEC447389AFEE7C9B86C3E36ECDB9D61FCD4A8`.
+- Còpia de seguretat exportada a Baixades i verificada amb `gzip -t` (`PTrack-20261110-180431.ptrack.json.gz`). Actualització iniciada amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect demana autoritzar l’anàlisi i Android encara informa de la 0.2.8 (10).
+
 ## PTrack 0.2.8 al Pixel — 9/11/2026
 
 - Reubicació de la informació de compilació (`buildInfo`): retirada del peu fix general de `PTrackScaffold` i afegida com a plafó *«Versió i compilació»* a sota de tot a `SettingsScreen`.

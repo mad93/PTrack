@@ -4,6 +4,8 @@ Revisió: 8/11/2026. **L'usuari confirma que PTrack Prova cotxe funciona al Peug
 
 ## Ús habitual i actualitzacions
 
+El 10/11/2026 s’ha preparat la **0.2.9 (11)** de la PTrack habitual, amb un minut de vigència per a l’última lectura vàlida dels kWh restants. L’APK s’ha verificat i copiat al Pixel, i s’ha iniciat l’actualització amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect demana autoritzar-ne l’anàlisi. [Registre de validació](VALIDATION.md#ptrack-029-al-pixel--10112026)
+
 El 8/11/2026 a les 16:33 CET s’ha actualitzat la PTrack habitual a **0.2.6 (8)** amb KingInstaller 2.5 i Shizuku 13.6.0, després de l’anàlisi autoritzada de Play Protect. S’han verificat l’APK instal·lada, l’origen d’instal·lació i el servei d’Android Auto. Shizuku s’ha aturat. Queden pendents la prova de les rutes a Google Maps i Waze i la prova al Peugeot. [Registre de validació](VALIDATION.md#ptrack-026-al-pixel--8112026)
 
 El 8/11/2026 a les 16:01 CET s’ha actualitzat la PTrack habitual a **0.2.5 (7)** amb KingInstaller 2.5 i Shizuku 13.6.0, després de l’anàlisi autoritzada de Play Protect. S’han verificat l’origen d’instal·lació, el servei d’Android Auto, els tres viatges previs i els controls d’ubicació i d’intercanvi del planificador. Shizuku s’ha aturat. Queda pendent la prova al Peugeot. [Registre de validació](VALIDATION.md#ptrack-025-al-pixel--8112026)
