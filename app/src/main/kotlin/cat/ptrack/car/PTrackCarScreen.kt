@@ -98,7 +98,8 @@ class PTrackCarScreen private constructor(context: CarContext, private val detai
         if (visible && vehicle.current(rendered) != null) {
             var deadline = vehicle.receivedAt + VehicleTelemetry.FRESH_MS + 1
             if (vehicle.cable != null && vehicle.cableAt + VehicleTelemetry.FRESH_MS >= rendered) deadline = min(deadline, vehicle.cableAt + VehicleTelemetry.FRESH_MS + 1)
-            if (vehicle.energy != null && vehicle.energyAt + VehicleTelemetry.FRESH_MS >= rendered) deadline = min(deadline, vehicle.energyAt + VehicleTelemetry.FRESH_MS + 1)
+            val energyDeadline = vehicle.energyAt + VehicleTelemetry.ENERGY_FRESH_MS + 1
+            if (vehicle.energy != null && energyDeadline > rendered) deadline = min(deadline, energyDeadline)
             main.postDelayed(expire, deadline - rendered)
         }
         Log.i("PTrackCar", "Dashboard requested · " + vehicle.connection(rendered) + if (vehicle.simulation) " · SIMULACIÓ" else "")

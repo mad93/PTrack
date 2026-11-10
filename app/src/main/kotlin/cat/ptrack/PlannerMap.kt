@@ -37,6 +37,7 @@ internal class PlannerMap(
     private var selected = 0
     private var endpoints = emptyList<Point>()
     private var picking = false
+    private var pendingFit = false
 
     init {
         addView(mapView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -138,11 +139,13 @@ internal class PlannerMap(
     }
 
     private fun fitRoutes() {
-        val points = (endpoints + plans.flatMap { plan -> plan.legs.flatMap { it.shape } }).distinct()
-        if (points.isEmpty()) return
+        pendingFit = true
         mapView.post {
             val ready = map ?: return@post
-            if (!isAttachedToWindow || mapView.width == 0) return@post
+            if (!pendingFit || !isAttachedToWindow || mapView.width == 0 || mapView.height == 0) return@post
+            pendingFit = false
+            val points = (endpoints + plans.flatMap { plan -> plan.legs.flatMap { it.shape } }).distinct()
+            if (points.isEmpty()) return@post
             val padding = (32 * resources.displayMetrics.density).toInt()
             if (points.size == 1) {
                 val point = points.single()
@@ -152,6 +155,16 @@ internal class PlannerMap(
                 ready.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, padding))
             }
         }
+    }
+
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        if (pendingFit) fitRoutes()
+    }
+
+    override fun onSizeChanged(width: Int, height: Int, oldWidth: Int, oldHeight: Int) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight)
+        if (pendingFit) fitRoutes()
     }
 
     override fun dispatchTouchEvent(event: android.view.MotionEvent): Boolean {

@@ -1,5 +1,47 @@
 # Validació
 
+## PTrack 0.2.8 al Pixel — 9/11/2026
+
+- Reubicació de la informació de compilació (`buildInfo`): retirada del peu fix general de `PTrackScaffold` i afegida com a plafó *«Versió i compilació»* a sota de tot a `SettingsScreen`.
+- Han passat `testDebugUnitTest` (32 proves unitàries) i `assembleDebug`. APK `artifacts/ptrack-pixel-028-20261109/PTrack-0.2.8.apk`, paquet `cat.ptrack`, versió 0.2.8 (10), conservant el certificat de depuració existent. SHA-256 local i transferit a `/sdcard/Download/PTrack-0.2.8.apk`: `57C123E5F3E540BBF7490DFAEB4E53EC5F918D63BC4AB7E11D3C75A8CE03D69B`.
+- Shizuku iniciat via ADB (`libshizuku.so`, PID 15618). KingInstaller obert al Pixel per procedir amb la instal·lació com a paquet `com.android.vending`.
+
+## Preparació de PTrack 0.2.7 per al Pixel — 9/11/2026
+
+- S’ha exportat i verificat una còpia amb els tres viatges a Baixades (`PTrack-20261108-235709.ptrack.json.gz`).
+- La compilació de depuració de `052319925513` a `codex/nou-look-compose` conserva el certificat de la 0.2.6. S’han executat les 32 proves unitàries durant la preparació i s’han compilat les proves instrumentades. L’APK copiada a Baixades coincideix amb la local. SHA-256 `D8A706EAEC6BBD994C7E3A35C9FCE5F1748E8E64EFFBC8E9D01D3A5DB5E04A77`.
+- KingInstaller 2.5 amb Shizuku 13.6.0 ha iniciat l’actualització. Play Protect demana autoritzar l’enviament de l’APK a Google per analitzar-la. L’última comprovació encara mostra PTrack 0.2.6 (8) instal·lada.
+
+## Configuració amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries. S’han compilat l’APK de depuració i les proves instrumentades.
+- `lintDebug` ha passat després de tractar la retirada del permís Bluetooth en llegir els dispositius aparellats. El selector avisa si manca el permís i la confirmació pot conservar l’adreça si el nom és inaccessible.
+- S’han revisat quatre previsualitzacions amb dades de mostra. Inclouen Configuració en català, castellà i anglès, la disposició en dues columnes a 1.024 dp, el text al 150% a 360 dp i l’editor de perfils. Captures a `artifacts/compose-settings-previews/`.
+- ADB no ha detectat cap dispositiu. Queda pendent la comprovació al Pixel de l’edició de perfils, les associacions Bluetooth, les còpies, el canvi d’idioma i TalkBack.
+
+## Planificador amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.
+- S’han revisat dues previsualitzacions amb un mapa esquemàtic i una ruta fictícia. A 393 dp, el formulari i el mapa es veuen en una columna desplaçable. A 1.024 dp, el mapa queda al costat del formulari i del resum de ruta. Captures a `artifacts/compose-planner-previews/`.
+- Queda pendent comprovar al Pixel la cerca Photon i ICGC, els gestos i la selecció al mapa de MapLibre, la conservació de l’esborrany en rotar o redimensionar, els canvis de parada i l’obertura a Google Maps i Waze.
+
+## Viatges amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries, amb comprovacions del resum en català, castellà i anglès. S’han compilat l’APK de depuració i les proves instrumentades.
+- S’han revisat cinc previsualitzacions amb dades simulades. A 393 dp s’han vist el calendari mensual i anual, la llista i el detall en pantalles separades. A 1.024 dp, la llista del dia i el detall seleccionat s’han vist costat per costat. Captures a `artifacts/compose-trips-previews/`.
+- Queda pendent comprovar al Pixel el filtre amb viatges reals, el gest Enrere i les exportacions PDF i JSON.
+
+## Navegació adaptativa amb Compose — 8/11/2026
+
+- Han passat les 32 proves unitàries i s’han compilat les proves instrumentades i l’APK de depuració a `codex/nou-look-compose`.
+- El renderitzador de Compose ha generat tres captures d’En directe amb dades simulades. Les dues de 393 dp mostren la barra inferior en tema clar i fosc. La de 1.024 dp mostra la barra lateral i les accions d’OBD en paral·lel. Captures a `artifacts/compose-navigation-previews/`.
+- Queda pendent la comprovació al Pixel de la navegació tàctil, Enrere, el teclat al planificador i els fluxos d’OBD.
+
+## En directe amb Compose — 8/11/2026
+
+- A la branca `codex/nou-look-compose` han passat les 32 proves unitàries. S’han compilat les proves instrumentades i l’APK de depuració.
+- L’emulador Pixel 10 s’ha aturat abans d’arrencar per un error d’acceleració de maquinari. Queda pendent comprovar en Android el tema clar i fosc, la disposició en finestres estretes i amples i les accions d’OBD.
+
 ## PTrack 0.2.6 al Pixel — 8/11/2026
 
 - Han passat `testDebugUnitTest` i `assembleDebug` des del commit `45b428b94a45` de `main`. L’APK `artifacts/ptrack-pixel-026-20261108/PTrack-0.2.6.apk` conserva el certificat de la 0.2.5. SHA-256 verificat al PC, a Baixades i al paquet instal·lat `943AAD149680234A4F452E943EBE4698BAD8C845BC3FC814876B2558598EE334`.

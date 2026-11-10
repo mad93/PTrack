@@ -3,21 +3,34 @@ package cat.ptrack
 import android.app.Activity
 import android.app.DatePickerDialog
 import android.app.TimePickerDialog
-import android.content.Context
-import android.graphics.Color
-import android.os.Build
 import android.os.CancellationSignal
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.text.InputType
 import android.util.Log
-import android.view.Gravity
-import android.view.View
-import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
-import android.widget.*
-import androidx.core.widget.doAfterTextChanged
+import android.widget.FrameLayout
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+
 import cat.ptrack.ElectricRoutePlanner.Plan
 import cat.ptrack.ElectricRoutePlanner.Priority
 import cat.ptrack.ElectricRoutePlanner.Stop
@@ -47,171 +60,187 @@ internal class PlannerScreen(
     private var job: Future<*>? = null
     private var calculation = 0
     private var disposed = false
-    private var busy = false
-    private var installed = false
-    private var importing = false
-    private var updating = false
+    private var busy by mutableStateOf(false)
+    private var installed by mutableStateOf(false)
+    private var importing by mutableStateOf(false)
     private var manualSoc = false
-    private var activeVehicle: VehicleProfile? = null
-
-    private val page = column()
-    val view: View get() = page
-    private val options = column()
-    private var departureMs: Long? = null
-    private val departure = button(departureLabel(), ::chooseDeparture)
-    private val suggestions = ListPopupWindow(activity).apply {
-        inputMethodMode = ListPopupWindow.INPUT_METHOD_NEEDED
-        isModal = false
-    }
-    private val results = column()
-    private val status = text("")
-    private val availability = text("")
-    private val source = text("")
-    private val vehicleName = text("")
-    private val origin = EditText(activity)
-    private val destination = EditText(activity)
+    private var activeVehicle by mutableStateOf<VehicleProfile?>(null)
+    private var departureMs by mutableStateOf<Long?>(null)
+    private var originText by mutableStateOf("")
+    private var destinationText by mutableStateOf("")
+    private var originError by mutableStateOf<String?>(null)
+    private var destinationError by mutableStateOf<String?>(null)
     private var originPlace: Place? = null
     private var destinationPlace: Place? = null
-    var locationRequest: CancellationSignal? = null
+    private var focused: PlannerEndpoint? = null
+    private var focusRequest by mutableStateOf<PlannerEndpoint?>(null)
+    private var dismissInput by mutableStateOf(0)
+    private var suggestions by mutableStateOf<PlaceSuggestions?>(null)
+    private var status by mutableStateOf("")
+    private var batterySource by mutableStateOf("")
+    private var optionsExpanded by mutableStateOf(false)
+    private var soc by mutableStateOf(80)
+    private var reserve by mutableStateOf(10)
+    private var minimum by mutableStateOf(50)
+    private var priority by mutableStateOf(Priority.entries.first())
+    var locationRequest by mutableStateOf<CancellationSignal?>(null)
         private set
-    private var placeTarget = origin
-    private var picking = false
+    private var placeTarget = PlannerEndpoint.ORIGIN
+    private var picking by mutableStateOf(false)
     private val map = PlannerMap(activity, ::select, ::selectStop) { point ->
         setPlace(placeTarget, Place(t("Punt al mapa", "Punto en el mapa", "Point on map"), point))
     }
     val mapView get() = map.mapView
-    private val calculate = button(t("Calcula les rutes", "Calcula las rutas", "Find routes")) { calculate() }
-    private val mapImport = button(t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map"), importMap)
-    private val locationLabel = t("La meva ubicació", "Mi ubicación", "My location")
-    private val myLocation = button(locationLabel, ::requestLocation)
-    private val picker = button(t("Tria al mapa", "Elige en el mapa", "Pick on map")) {
-        if (!origin.hasFocus() && !destination.hasFocus()) placeTarget = if (originPlace == null) origin else destination
-        picking = !picking
-        map.setPicking(picking)
-        if (picking) {
-            hideSuggestions()
-            hideKeyboard()
-            status.text = if (placeTarget === origin)
-                t("Toca l’origen al mapa.", "Toca el origen en el mapa.", "Tap the origin on the map.")
-            else t("Toca el destí al mapa.", "Toca el destino en el mapa.", "Tap the destination on the map.")
-        } else status.text = ""
-    }
-    private var plans = emptyList<Plan>()
-    private var trip: ValhallaPlanner.Trip? = null
-    private var plannedVehicle: PlanningEnergy? = null
-    private var selected = 0
-    private var stopSelected: Int? = null
+
+    private var plans by mutableStateOf(emptyList<Plan>())
+    private var trip by mutableStateOf<ValhallaPlanner.Trip?>(null)
+    private var plannedVehicle by mutableStateOf<PlanningEnergy?>(null)
+    private var selected by mutableStateOf(0)
+    private var stopSelected by mutableStateOf<Int?>(null)
     private var excluded = emptySet<String>()
-    private var reducedMargin = false
+    private var reducedMargin by mutableStateOf(false)
     private data class SkipPreview(val plan: Plan, val stop: Stop, val arrivalKwh: Double)
     private data class Previous(val plans: List<Plan>, val selected: Int, val excluded: Set<String>, val reducedMargin: Boolean)
-    private var proposedSkip: SkipPreview? = null
-    private var previous: Previous? = null
+    private var proposedSkip by mutableStateOf<SkipPreview?>(null)
+    private var previous by mutableStateOf<Previous?>(null)
 
-    private val soc = slider(t("Bateria de sortida", "Batería de salida", "Starting battery"), "%", 100, 80) {
-        manualSoc = true
-        source.text = t("Bateria inicial · entrada manual", "Batería inicial · entrada manual", "Starting battery · manual entry")
-    }
-    private val reserve = slider(t("Bateria mínima d’arribada", "Batería mínima de llegada", "Minimum arrival battery"), "%", 99, 10)
-    private val minimum = slider(t("Potència mínima dels carregadors CCS", "Potencia mínima de los cargadores CCS",
-        "Minimum CCS charger power"), " kW", 1000, 50)
-    private val priority = Spinner(activity).apply {
-        adapter = ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, listOf(
-            t("Arribar abans", "Llegar antes", "Arrive sooner"),
-            t("Carregar menys temps", "Cargar menos tiempo", "Spend less time charging")))
-    }
-
-    init {
-        page.isFocusableInTouchMode = true
-        setupPlace(origin, t("Origen", "Origen", "Origin"))
-        setupPlace(destination, t("Destí", "Destino", "Destination"))
-        val fields = column().apply {
-            addView(origin)
-            addView(destination)
-        }
-        val swap = button("⇅", ::swapPlaces).apply {
-            contentDescription = t("Intercanvia origen i destí", "Intercambia origen y destino", "Swap origin and destination")
-            tooltipText = contentDescription
-            textSize = 24f
-            setPadding(0, 0, 0, 0)
-        }
-        page.addView(LinearLayout(activity).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(fields, LinearLayout.LayoutParams(0, -2, 1f))
-            addView(swap, LinearLayout.LayoutParams(dp(52), dp(52)))
-        })
-        page.addView(row(myLocation, picker))
-        page.addView(vehicleName)
-        page.addView(source)
-        refreshStartingBattery()
-        page.addView(button(t("Opcions de viatge", "Opciones de viaje", "Trip options")) { toggle(options) })
-        options.addView(text(t("Prioritat de viatge", "Prioridad del viaje", "Trip priority")))
-        options.addView(priority)
-        options.addView(row(departure, button(t("Ara", "Ahora", "Now")) { setDeparture(null) }))
-        options.visibility = View.GONE
-        page.addView(options)
-        page.addView(calculate)
-        page.addView(map, LinearLayout.LayoutParams(-1, dp(340)))
-        page.addView(status)
-        page.addView(results)
-        page.addView(availability)
-        page.addView(mapImport)
-        priority.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
-                if (trip?.priority?.ordinal != position && trip != null) invalidateRoutes()
-            }
-        }
+    @Composable
+    fun Content(saved: @Composable () -> Unit) {
+        PlannerLayout(
+            form = {
+                PlannerForm(
+                    PlannerFormState(originText, destinationText, originError, destinationError, suggestions,
+                        focusRequest, dismissInput, activeVehicle?.label.orEmpty(), batterySource, picking,
+                        locationRequest != null, optionsExpanded, soc, reserve, minimum, priority,
+                        departureLabel(), canCalculate(), busy, status.takeIf { plans.isEmpty() }.orEmpty()),
+                    labels, ::onAction
+                )
+            },
+            map = { modifier ->
+                Box(modifier) {
+                    AndroidView(
+                        factory = { context ->
+                            FrameLayout(context).apply {
+                                addView(map, FrameLayout.LayoutParams(-1, -1))
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        onRelease = { it.removeView(map) },
+                        update = {}
+                    )
+                    if (picking) {
+                        Surface(Modifier.align(Alignment.TopCenter).padding(10.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh) {
+                            Text(pickingHint(), Modifier.padding(10.dp), style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
+                }
+            },
+            results = { Results() },
+            saved = saved,
+            revealMap = picking
+        )
     }
 
     fun mapStatus(available: Boolean, working: Boolean) {
         installed = available
         importing = working
         if (trip == null && !busy) refreshStartingBattery()
-        availability.visibility = if (available) View.GONE else View.VISIBLE
-        availability.text = t("Cal importar el graf de carreteres per calcular rutes.",
-            "Importa el mapa de carreteras para calcular rutas.", "Import a routing map to calculate routes.")
-        mapImport.text = if (working) t("Important el mapa…", "Importando el mapa…", "Importing map…")
-        else if (available) t("Actualitza el mapa de rutes", "Actualiza el mapa de rutas", "Update routing map")
-        else t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map")
-        controls()
     }
+
+    private fun canCalculate() = installed && !importing && !busy && activeVehicle != null
+
+    private fun onAction(action: PlannerAction) {
+        when (action) {
+            is PlannerAction.Edit -> edit(action.endpoint, action.text)
+            is PlannerAction.Focus -> focus(action.endpoint, action.focused)
+            is PlannerAction.Search -> if (place(action.endpoint) == null) {
+                suggest(action.endpoint, immediate = true, inCatalonia = action.icgc)
+            }
+            is PlannerAction.Choose -> setPlace(action.endpoint, action.place)
+            is PlannerAction.Battery -> if (soc != action.percent) {
+                soc = action.percent
+                manualSoc = true
+                batterySource = t("Bateria inicial · entrada manual", "Batería inicial · entrada manual", "Starting battery · manual entry")
+                invalidateOptions()
+            }
+            is PlannerAction.Reserve -> if (reserve != action.percent) {
+                reserve = action.percent
+                invalidateOptions()
+            }
+            is PlannerAction.Power -> if (minimum != action.kw) {
+                minimum = action.kw
+                invalidateOptions()
+            }
+            is PlannerAction.Prefer -> if (priority != action.priority) {
+                priority = action.priority
+                if (busy || trip != null) invalidateRoutes()
+            }
+            PlannerAction.AcknowledgeFocus -> focusRequest = null
+            PlannerAction.Swap -> swapPlaces()
+            PlannerAction.Location -> requestLocation()
+            PlannerAction.Pick -> togglePicking()
+            PlannerAction.ToggleOptions -> optionsExpanded = !optionsExpanded
+            PlannerAction.ChooseDeparture -> chooseDeparture()
+            PlannerAction.ResetDeparture -> setDeparture(null)
+            PlannerAction.Calculate -> calculate()
+        }
+    }
+
+    private fun invalidateOptions() {
+        if (busy || trip != null || status.isNotEmpty()) invalidateRoutes()
+    }
+
+    private fun togglePicking() {
+        if (focused == null) placeTarget = if (originPlace == null) PlannerEndpoint.ORIGIN else PlannerEndpoint.DESTINATION
+        picking = !picking
+        map.setPicking(picking)
+        if (picking) {
+            clearInput()
+        }
+    }
+
+    private fun pickingHint(): String =
+        if (placeTarget == PlannerEndpoint.ORIGIN)
+            t("Toca l’origen al mapa.", "Toca el origen en el mapa.", "Tap the origin on the map.")
+        else t("Toca el destí al mapa.", "Toca el destino en el mapa.", "Tap the destination on the map.")
 
     fun vehicleChanged(vehicle: VehicleProfile) {
         val previous = activeVehicle
         activeVehicle = vehicle
-        vehicleName.text = vehicle.label
         if (previous?.id == vehicle.id && previous.capacityKwh == vehicle.capacityKwh &&
             previous.maxDcChargeKw == vehicle.maxDcChargeKw) return
         val hadRoute = trip != null || busy
         if (previous?.id != vehicle.id) manualSoc = false
         invalidateRoutes()
         refreshStartingBattery()
-        if (hadRoute) status.text = t("El perfil ha canviat. Torna a calcular la ruta.", "El perfil ha cambiado. Vuelve a calcular la ruta.",
+        if (hadRoute) status = t("El perfil ha canviat. Torna a calcular la ruta.", "El perfil ha cambiado. Vuelve a calcular la ruta.",
             "The profile changed. Recalculate the route.")
     }
 
     private fun requestLocation() {
         locationRequest = CancellationSignal()
-        myLocation.isEnabled = false
-        myLocation.text = t("Localitzant…", "Localizando…", "Locating…")
         locate()
     }
 
-    fun cancelLocation() {
+    private fun cancelLocation() {
         val request = locationRequest ?: return
         locationRequest = null
         request.cancel()
-        myLocation.isEnabled = true
-        myLocation.text = locationLabel
+    }
+
+    fun leave() {
+        cancelLocation()
+        clearInput()
     }
 
     fun location(request: CancellationSignal, place: Place?) {
         if (locationRequest !== request) return
         cancelLocation()
-        if (place == null) status.text = t("Ubicació indisponible. Tria un punt al mapa.",
+        if (place == null) status = t("Ubicació indisponible. Tria un punt al mapa.",
             "Ubicación no disponible. Elige un punto en el mapa.", "Location unavailable. Pick a point on the map.")
-        else setPlace(origin, place)
+        else setPlace(PlannerEndpoint.ORIGIN, place)
     }
 
     fun close() {
@@ -223,49 +252,49 @@ internal class PlannerScreen(
         mapView.onDestroy()
     }
 
-    private fun setupPlace(field: EditText, hint: String) {
-        field.hint = "$hint · " + t("carrer, poble o masia", "calle, pueblo o masía", "street, town or farm")
-        field.contentDescription = hint
-        field.setSingleLine()
-        field.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        field.imeOptions = EditorInfo.IME_ACTION_SEARCH
-        field.setOnEditorActionListener { _, action, _ ->
-            if (action != EditorInfo.IME_ACTION_SEARCH) false
-            else {
-                if (place(field) == null) suggest(field, immediate = true)
-                true
-            }
-        }
-        field.setOnFocusChangeListener { _, focused ->
-            if (focused) {
-                placeTarget = field
-                if (!picking && place(field) == null) suggest(field)
-            } else if (placeTarget === field) hideSuggestions()
-        }
-        field.doAfterTextChanged {
-            if (!updating) {
-                field.error = null
-                if (field === origin) {
-                    cancelLocation()
-                    originPlace = null
-                } else destinationPlace = null
-                invalidateRoutes()
-                if (field.hasFocus()) suggest(field)
-            }
+    private fun text(endpoint: PlannerEndpoint) =
+        if (endpoint == PlannerEndpoint.ORIGIN) originText else destinationText
+
+    private fun place(endpoint: PlannerEndpoint) =
+        if (endpoint == PlannerEndpoint.ORIGIN) originPlace else destinationPlace
+
+    private fun focus(endpoint: PlannerEndpoint, hasFocus: Boolean) {
+        if (hasFocus) {
+            focused = endpoint
+            placeTarget = endpoint
+            if (!picking && place(endpoint) == null) suggest(endpoint)
+        } else if (focused == endpoint) {
+            focused = null
+            hideSuggestions()
         }
     }
 
-    private fun place(field: EditText): Place? = if (field === origin) originPlace else destinationPlace
+    private fun edit(endpoint: PlannerEndpoint, value: String) {
+        if (endpoint == PlannerEndpoint.ORIGIN) {
+            cancelLocation()
+            originText = value
+            originPlace = null
+            originError = null
+        } else {
+            destinationText = value
+            destinationPlace = null
+            destinationError = null
+        }
+        invalidateRoutes()
+        if (focused == endpoint) suggest(endpoint)
+    }
 
-    private fun setPlace(field: EditText, value: Place) {
-        if (field === origin) {
+    private fun setPlace(endpoint: PlannerEndpoint, value: Place) {
+        if (endpoint == PlannerEndpoint.ORIGIN) {
             cancelLocation()
             originPlace = value
-        } else destinationPlace = value
-        updating = true
-        field.setText(value.name)
-        field.error = null
-        updating = false
+            originText = value.name
+            originError = null
+        } else {
+            destinationPlace = value
+            destinationText = value.name
+            destinationError = null
+        }
         endpointsChanged()
     }
 
@@ -274,50 +303,45 @@ internal class PlannerScreen(
         val previousOrigin = originPlace
         originPlace = destinationPlace
         destinationPlace = previousOrigin
-        val originText = origin.text.toString()
-        updating = true
-        origin.setText(destination.text.toString())
-        destination.setText(originText)
-        origin.error = null
-        destination.error = null
-        updating = false
+        val previousText = originText
+        originText = destinationText
+        destinationText = previousText
+        originError = null
+        destinationError = null
         endpointsChanged()
     }
 
     private fun endpointsChanged() {
         picking = false
         map.setPicking(false)
-        hideSuggestions()
-        hideKeyboard()
-        page.requestFocus()
+        clearInput()
         invalidateRoutes(fit = true)
     }
 
-    private fun suggest(field: EditText, immediate: Boolean = false, inCatalonia: Boolean = false) {
+    private fun suggest(endpoint: PlannerEndpoint, immediate: Boolean = false, inCatalonia: Boolean = false) {
         hideSuggestions()
-        val query = field.text.toString().trim()
+        val query = text(endpoint).trim()
         if (query.length < 3 || PlannerPlaces.coordinates(query) != null) return
         val id = lookupId
         val request = Runnable {
-            if (!field.hasFocus() || !field.hasWindowFocus() || !field.isShown) return@Runnable
-            showSuggestions(field, emptyList(),
+            if (disposed || focused != endpoint) return@Runnable
+            suggestions = PlaceSuggestions(endpoint, emptyList(),
                 if (inCatalonia) t("Cercant a l’ICGC…", "Buscando en el ICGC…", "Searching ICGC…")
                 else t("Cercant…", "Buscando…", "Searching…"))
             lookup = searching.submit {
                 val response = runCatching { PlannerPlaces.search(query, labels.locale.language, inCatalonia) }
                 handler.post {
-                    if (disposed || id != lookupId || !field.hasFocus() || !field.hasWindowFocus() || !field.isShown) return@post
-                    response.fold({ places ->
-                        showSuggestions(field, places, t(
-                            "Cap resultat. Prova d’afegir el municipi.",
-                            "Sin resultados. Prueba a añadir el municipio.",
-                            "No results. Try adding the town."), offerIcgc = !inCatalonia)
-                    }, {
-                        showSuggestions(field, emptyList(), t(
-                            "Cerca indisponible. Revisa la connexió o tria al mapa.",
-                            "Búsqueda no disponible. Revisa la conexión o elige en el mapa.",
-                            "Search unavailable. Check your connection or pick on the map."), offerIcgc = !inCatalonia)
-                    })
+                    if (disposed || id != lookupId || focused != endpoint) return@post
+                    suggestions = response.fold(
+                        { places -> PlaceSuggestions(endpoint, places,
+                            t("Cap resultat. Prova d’afegir el municipi.",
+                                "Sin resultados. Prueba a añadir el municipio.",
+                                "No results. Try adding the town."), offerIcgc = !inCatalonia) },
+                        { PlaceSuggestions(endpoint, emptyList(),
+                            t("Cerca indisponible. Revisa la connexió o tria al mapa.",
+                                "Búsqueda no disponible. Revisa la conexión o elige en el mapa.",
+                                "Search unavailable. Check your connection or pick on the map."), offerIcgc = !inCatalonia) }
+                    )
                 }
             }
         }
@@ -325,66 +349,55 @@ internal class PlannerScreen(
         handler.postDelayed(request, if (immediate) 0L else 400L)
     }
 
-    private fun showSuggestions(field: EditText, places: List<Place>, message: String, offerIcgc: Boolean = false) {
-        val matches = places.map { it.name }.ifEmpty { listOf(message) }
-        val rows = if (offerIcgc) matches + t("Cerca a Catalunya (ICGC)", "Buscar en Cataluña (ICGC)",
-            "Search Catalonia (ICGC)") else matches
-        val adapter = object : ArrayAdapter<String>(activity, android.R.layout.simple_list_item_1, rows) {
-            override fun areAllItemsEnabled() = places.isNotEmpty()
-            override fun isEnabled(position: Int) = position in places.indices || (offerIcgc && position == matches.size)
-        }
-        suggestions.anchorView = field
-        suggestions.width = field.width
-        suggestions.setAdapter(adapter)
-        suggestions.show()
-        // The list may already exist from the loading state.
-        suggestions.listView?.setOnItemClickListener { _, _, index, _ ->
-            if (offerIcgc && index == matches.size) suggest(field, immediate = true, inCatalonia = true)
-            else places.getOrNull(index)?.let { setPlace(field, it) }
-        }
-    }
-
     private fun hideSuggestions() {
         lookupId++
         lookupRequest?.let(handler::removeCallbacks)
         lookup?.cancel(true)
-        suggestions.dismiss()
+        suggestions = null
+    }
+
+    private fun clearInput() {
+        focused = null
+        focusRequest = null
+        hideSuggestions()
+        dismissInput++
     }
 
     private fun calculate() {
+        if (!canCalculate()) return
         refreshStartingBattery()
-        val from = (originPlace ?: PlannerPlaces.coordinates(origin.text.toString()))?.point
-        val to = (destinationPlace ?: PlannerPlaces.coordinates(destination.text.toString()))?.point
+        val from = (originPlace ?: PlannerPlaces.coordinates(originText))?.point
+        val to = (destinationPlace ?: PlannerPlaces.coordinates(destinationText))?.point
         if (from == null || to == null) {
-            val field = if (from == null) origin else destination
-            field.requestFocus()
-            field.error = t("Tria un resultat de la cerca o un punt al mapa.",
+            val error = t("Tria un resultat de la cerca o un punt al mapa.",
                 "Elige un resultado de la búsqueda o un punto en el mapa.",
                 "Choose a search result or a point on the map.")
+            if (from == null) {
+                originError = error
+                focusRequest = PlannerEndpoint.ORIGIN
+            } else {
+                destinationError = error
+                focusRequest = PlannerEndpoint.DESTINATION
+            }
             return
         }
         if (from == to) {
-            destination.error = t("Tria un destí diferent de l’origen.",
+            destinationError = t("Tria un destí diferent de l’origen.",
                 "Elige un destino distinto del origen.", "Choose an end point different from the start.")
             return
         }
-        val start = soc.progress.toDouble()
-        val floor = reserve.progress.toDouble()
-        val minKw = minimum.progress.toDouble()
-        if (start < floor) {
-            options.visibility = View.VISIBLE
-            status.text = t("La bateria de sortida ha de cobrir la reserva.",
+        if (soc < reserve) {
+            optionsExpanded = true
+            status = t("La bateria de sortida ha de cobrir la reserva.",
                 "La batería de salida debe cubrir la reserva.", "The starting battery must cover the reserve.")
             return
         }
-        hideSuggestions()
-        hideKeyboard()
-        page.requestFocus()
-        options.visibility = View.GONE
+        clearInput()
+        optionsExpanded = false
         picking = false
         map.setPicking(false)
-        val request = ValhallaPlanner.Trip(from, to, start, floor, minKw,
-            Priority.entries[priority.selectedItemPosition], departureMs ?: System.currentTimeMillis())
+        val request = ValhallaPlanner.Trip(from, to, soc.toDouble(), reserve.toDouble(), minimum.toDouble(),
+            priority, departureMs ?: System.currentTimeMillis())
         runPlanner(refreshVehicle = true, work = { vehicle to alternatives(request) }) { (vehicle, routes) ->
             if (routes.isEmpty()) noRoute() else {
                 trip = request
@@ -416,7 +429,7 @@ internal class PlannerScreen(
         proposedSkip = null
         runPlanner(work = { skip(request, plan, stop) }) { replacement ->
             when {
-                replacement == null -> status.text = t("No es pot saltar la parada amb el marge disponible. Busca alternatives.",
+                replacement == null -> status = t("No es pot saltar la parada amb el marge disponible. Busca alternatives.",
                     "No se puede saltar la parada con el margen disponible. Busca alternativas.",
                     "This stop cannot be skipped with the available margin. Find alternatives.")
                 replacement.second -> {
@@ -453,9 +466,8 @@ internal class PlannerScreen(
         val version = ++calculation
         val snapshot = plannedVehicle.takeUnless { refreshVehicle }
         busy = true
-        status.text = t("Calculant amb el mapa local…", "Calculando con el mapa local…", "Calculating with the local map…")
-        controls()
-        renderResults()
+        status = t("Calculant amb el mapa local…", "Calculando con el mapa local…", "Calculating with the local map…")
+
         job = routing.submit {
             val result = runCatching {
                 val (profile, chargeProfile) = Store(context).use {
@@ -471,26 +483,25 @@ internal class PlannerScreen(
             handler.post {
                 if (disposed || version != calculation) return@post
                 busy = false
-                status.text = ""
-                controls()
+                status = ""
+
                 result.fold(complete, { error ->
                     if (error is ConsumptionRepository.MissingVehicleCapacity) {
-                        status.text = t("Configura la capacitat útil del vehicle en kWh o registra prou viatges per estimar-la.",
+                        status = t("Configura la capacitat útil del vehicle en kWh o registra prou viatges per estimar-la.",
                             "Configura la capacidad útil del vehículo en kWh o registra suficientes viajes para estimarla.",
                             "Set the vehicle’s usable capacity in kWh or record enough trips to estimate it.")
                     } else {
                         Log.w("PTrackPlanner", "Could not calculate route", error)
-                        status.text = t("Ha fallat el càlcul amb el mapa local.", "Falló el cálculo con el mapa local.",
+                        status = t("Ha fallat el càlcul amb el mapa local.", "Falló el cálculo con el mapa local.",
                             "Routing with the local map failed.")
                     }
                 })
-                renderResults()
             }
         }
     }
 
     private fun noRoute() {
-        status.text = t("Cap ruta viable amb aquests punts i opcions.", "No hay rutas viables con estos puntos y opciones.",
+        status = t("Cap ruta viable amb aquests punts i opcions.", "No hay rutas viables con estos puntos y opciones.",
             "No feasible routes with these points and options.")
     }
 
@@ -499,9 +510,8 @@ internal class PlannerScreen(
         selected = selection
         stopSelected = null
         proposedSkip = null
-        status.text = ""
+        status = ""
         drawMap(fit = true)
-        renderResults()
     }
 
     private fun select(index: Int) {
@@ -509,80 +519,120 @@ internal class PlannerScreen(
         selected = index
         stopSelected = null
         proposedSkip = null
-        status.text = ""
+        status = ""
         drawMap()
-        renderResults()
     }
 
     private fun selectStop(index: Int) {
         if (busy || index !in plans.getOrNull(selected)?.charges.orEmpty().indices) return
         stopSelected = if (stopSelected == index) null else index
         proposedSkip = null
-        status.text = ""
-        renderResults()
+        status = ""
     }
 
-    private fun renderResults() {
-        results.removeAllViews()
-        val plan = plans.getOrNull(selected) ?: return
-        plans.forEachIndexed { index, option ->
-            val summary = "${labels.n(option.legs.sumOf { it.km }, 0)} km · ${minutes(option.totalMinutes)} · ${percent(option.arrivalKwh)}"
-            results.addView(button("${if (selected == index) "●" else "○"} ${t("Ruta", "Ruta", "Route")} ${index + 1} · $summary") {
-                select(index)
-            }.apply { isEnabled = !busy })
-        }
-        results.addView(text(t("Conducció ${minutes(plan.driveMinutes)} · càrrega ${minutes(plan.chargeMinutes)} · ${plan.charges.size} parades",
-            "Conducción ${minutes(plan.driveMinutes)} · carga ${minutes(plan.chargeMinutes)} · ${plan.charges.size} paradas",
-            "Driving ${minutes(plan.driveMinutes)} · charging ${minutes(plan.chargeMinutes)} · ${plan.charges.size} stops")))
-        val vehicle = checkNotNull(plannedVehicle)
-        val capacity = labels.n(vehicle.capacityKwh, 1)
-        results.addView(text(if (vehicle.learnedCapacityKwh == null)
-            t("Capacitat útil de referència · $capacity kWh", "Capacidad útil de referencia · $capacity kWh",
-                "Reference usable capacity · $capacity kWh")
-        else t("Capacitat útil estimada dels viatges · $capacity kWh", "Capacidad útil estimada de los viajes · $capacity kWh",
-            "Usable capacity estimated from trips · $capacity kWh")))
-        trip?.let { results.addView(text(departureLabel(it.departureMs))) }
-        if (plan.charges.any { it.ambientC != null }) results.addView(text(t(
-            "Previsió horària d’Open-Meteo.", "Previsión horaria de Open-Meteo.", "Hourly forecast by Open-Meteo.")))
-        if (reducedMargin) results.addView(text(t("Marge reduït acceptat per a un tram.", "Margen reducido aceptado para un tramo.",
-            "Reduced margin accepted for one leg.")))
-        if (previous != null) results.addView(button(t("Desfés el canvi de parada", "Deshaz el cambio de parada",
-            "Undo stop change"), ::undoChange).apply { isEnabled = !busy })
-        if (plan.estimatedKm > 0) results.addView(text(t(
-            "Consum de referència en ${labels.n(plan.estimatedKm, 0)} km.",
-            "Consumo de referencia en ${labels.n(plan.estimatedKm, 0)} km.",
-            "Reference consumption used for ${labels.n(plan.estimatedKm, 0)} km.")))
-        plan.charges.forEachIndexed { index, charge ->
-            val eta = trip?.let { formatTime(it.departureMs + (charge.arrivalMinutes * 60_000).toLong()) }.orEmpty()
-            val ambient = charge.ambientC?.let { "${labels.n(it, 0)} °C" }
-                ?: t("Sense previsió", "Sin previsión", "No forecast")
-            val estimate = if (charge.learned) t("Corba DC apresa", "Curva DC aprendida", "Learned DC curve")
-                else t("Corba de referència", "Curva de referencia", "Reference curve")
-            results.addView(button("${index + 1}. ${charge.stop.name} · ${labels.n(charge.stop.powerKw, 0)} kW\n" +
-                "${percent(charge.arrivalKwh)} → ${percent(charge.departureKwh)} · ${minutes(charge.minutes)}\n" +
-                "$eta · $ambient · $estimate") {
-                selectStop(index)
-            }.apply { isEnabled = !busy })
-            if (stopSelected == index && !busy) {
-                results.addView(button(t("Cerca el carregador a Google Maps", "Busca el cargador en Google Maps",
-                    "Find charger in Google Maps")) { showCharger(charge.stop.point.toString(), charge.stop.name) })
-                results.addView(row(button(t("Salta la parada", "Salta la parada", "Skip stop")) { skip(plan, charge.stop) },
-                    button(t("Busca alternatives", "Busca alternativas", "Find alternatives")) { searchReplacement(charge.stop) }))
-                proposedSkip?.let { preview ->
-                    val arrival = percent(preview.arrivalKwh)
-                    val reserve = labels.n(checkNotNull(trip).reserve, 1)
-                    results.addView(text(t("Arribaries amb un $arrival · reserva del $reserve%.",
-                        "Llegarías con un $arrival · reserva del $reserve%.",
-                        "You would arrive with $arrival · $reserve% reserve.")))
-                    results.addView(button(t("Accepta el marge reduït", "Acepta el margen reducido", "Accept reduced margin")) {
-                        acceptSkip(preview.plan, preview.stop, true)
-                    })
+    @Composable
+    private fun Results() {
+        plans.getOrNull(selected)?.let { plan ->
+            PlannerPanel {
+                Text(t("Ruta proposada", "Ruta propuesta", "Suggested route"),
+                    style = MaterialTheme.typography.titleLarge)
+                if (status.isNotEmpty()) ResultNote(status)
+                RouteHighlights(
+                    "${labels.n(plan.legs.sumOf { it.km }, 0)} km",
+                    minutes(plan.totalMinutes), percent(plan.arrivalKwh), labels
+                )
+                if (plans.size > 1) {
+                    plans.forEachIndexed { index, option ->
+                        val summary = "${labels.n(option.legs.sumOf { it.km }, 0)} km · ${minutes(option.totalMinutes)} · ${percent(option.arrivalKwh)}"
+                        FilterChip(selected == index, onClick = { select(index) }, enabled = !busy,
+                            label = { Text(t("Ruta", "Ruta", "Route") + " ${index + 1} · $summary") })
+                    }
                 }
+                Text(t("Conducció ${minutes(plan.driveMinutes)} · càrrega ${minutes(plan.chargeMinutes)} · ${plan.charges.size} parades",
+                    "Conducción ${minutes(plan.driveMinutes)} · carga ${minutes(plan.chargeMinutes)} · ${plan.charges.size} paradas",
+                    "Driving ${minutes(plan.driveMinutes)} · charging ${minutes(plan.chargeMinutes)} · ${plan.charges.size} stops"))
+                val vehicle = checkNotNull(plannedVehicle)
+                val capacity = labels.n(vehicle.capacityKwh, 1)
+                ResultNote(if (vehicle.learnedCapacityKwh == null)
+                    t("Capacitat útil de referència · $capacity kWh", "Capacidad útil de referencia · $capacity kWh",
+                        "Reference usable capacity · $capacity kWh")
+                else t("Capacitat útil estimada dels viatges · $capacity kWh", "Capacidad útil estimada de los viajes · $capacity kWh",
+                    "Usable capacity estimated from trips · $capacity kWh"))
+                trip?.let { ResultNote(departureLabel(it.departureMs)) }
+                if (plan.charges.any { it.ambientC != null }) ResultNote(t(
+                    "Previsió horària d’Open-Meteo.", "Previsión horaria de Open-Meteo.", "Hourly forecast by Open-Meteo."))
+                if (reducedMargin) ResultNote(t("Marge reduït acceptat per a un tram.",
+                    "Margen reducido aceptado para un tramo.", "Reduced margin accepted for one leg."))
+                if (previous != null) TextButton(onClick = ::undoChange, enabled = !busy) {
+                    Text(t("Desfés el canvi de parada", "Deshaz el cambio de parada", "Undo stop change"))
+                }
+                if (plan.estimatedKm > 0) ResultNote(t(
+                    "Consum de referència en ${labels.n(plan.estimatedKm, 0)} km.",
+                    "Consumo de referencia en ${labels.n(plan.estimatedKm, 0)} km.",
+                    "Reference consumption used for ${labels.n(plan.estimatedKm, 0)} km."))
+
+                plan.charges.forEachIndexed { index, charge ->
+                    val eta = trip?.let { formatTime(it.departureMs + (charge.arrivalMinutes * 60_000).toLong()) }.orEmpty()
+                    val ambient = charge.ambientC?.let { "${labels.n(it, 0)} °C" }
+                        ?: t("Sense previsió", "Sin previsión", "No forecast")
+                    val estimate = if (charge.learned) t("Corba DC apresa", "Curva DC aprendida", "Learned DC curve")
+                        else t("Corba de referència", "Curva de referencia", "Reference curve")
+                    Surface(
+                        onClick = { selectStop(index) },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !busy,
+                        shape = MaterialTheme.shapes.medium,
+                        color = if (stopSelected == index) MaterialTheme.colorScheme.primaryContainer
+                            else MaterialTheme.colorScheme.surfaceContainerHigh
+                    ) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text("${index + 1}. ${charge.stop.name} · ${labels.n(charge.stop.powerKw, 0)} kW",
+                                style = MaterialTheme.typography.titleSmall)
+                            Text("${percent(charge.arrivalKwh)} → ${percent(charge.departureKwh)} · ${minutes(charge.minutes)}")
+                            ResultNote("$eta · $ambient · $estimate")
+                        }
+                    }
+                    if (stopSelected == index && !busy) {
+                        TextButton(onClick = { showCharger(charge.stop.point.toString(), charge.stop.name) }) {
+                            Text(t("Cerca el carregador a Google Maps", "Busca el cargador en Google Maps", "Find charger in Google Maps"))
+                        }
+                        PlannerActions(t("Salta la parada", "Salta la parada", "Skip stop"), { skip(plan, charge.stop) },
+                            t("Busca alternatives", "Busca alternativas", "Find alternatives"), { searchReplacement(charge.stop) })
+                        proposedSkip?.let { preview ->
+                            val arrival = percent(preview.arrivalKwh)
+                            val reserve = labels.n(checkNotNull(trip).reserve, 1)
+                            ResultNote(t("Arribaries amb un $arrival · reserva del $reserve%.",
+                                "Llegarías con un $arrival · reserva del $reserve%.",
+                                "You would arrive with $arrival · $reserve% reserve."))
+                            Button(onClick = { acceptSkip(preview.plan, preview.stop, true) }) {
+                                Text(t("Accepta el marge reduït", "Acepta el margen reducido", "Accept reduced margin"))
+                            }
+                        }
+                    }
+                }
+                Text(t("Obre l’itinerari amb", "Abre el itinerario con", "Open itinerary in"),
+                    style = MaterialTheme.typography.titleSmall)
+                PlannerActions("Google Maps", { open(plan, true) }, "Waze", { open(plan, false) }, enabled = !busy)
             }
         }
-        results.addView(text(t("Obre l’itinerari amb", "Abre el itinerario con", "Open itinerary in")))
-        results.addView(row(button("Google Maps") { open(plan, true) }.apply { isEnabled = !busy },
-            button("Waze") { open(plan, false) }.apply { isEnabled = !busy }))
+
+        PlannerPanel {
+            Text(t("Mapa de rutes", "Mapa de rutas", "Routing map"), style = MaterialTheme.typography.titleMedium)
+            if (!installed) ResultNote(t("Cal importar el graf de carreteres per calcular rutes.",
+                "Importa el mapa de carreteras para calcular rutas.", "Import a routing map to calculate routes."))
+            OutlinedButton(onClick = importMap, enabled = !importing && !busy) {
+                Text(when {
+                    importing -> t("Important el mapa…", "Importando el mapa…", "Importing map…")
+                    installed -> t("Actualitza el mapa de rutes", "Actualiza el mapa de rutas", "Update routing map")
+                    else -> t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map")
+                })
+            }
+        }
+    }
+
+    @Composable
+    private fun ResultNote(value: String) {
+        Text(value, style = MaterialTheme.typography.bodySmall)
     }
 
     private fun open(plan: Plan, maps: Boolean) {
@@ -603,10 +653,8 @@ internal class PlannerScreen(
         proposedSkip = null
         previous = null
         reducedMargin = false
-        status.text = ""
-        controls()
+        status = ""
         drawMap(fit)
-        renderResults()
     }
 
     private fun drawMap(fit: Boolean = false) {
@@ -614,22 +662,15 @@ internal class PlannerScreen(
             trip?.origin ?: originPlace?.point, trip?.destination ?: destinationPlace?.point), fit)
     }
 
-    private fun controls() {
-        calculate.text = if (busy) t("Calculant…", "Calculando…", "Calculating…")
-        else t("Calcula les rutes", "Calcula las rutas", "Find routes")
-        calculate.isEnabled = installed && !importing && !busy
-        mapImport.isEnabled = !importing && !busy
-    }
-
     private fun refreshStartingBattery() {
         if (manualSoc) return
         val vehicle = VehicleTelemetry.LIVE.snapshot()
         val live = vehicle.takeIf { !it.simulation && it.vehicleId == activeVehicle?.id }?.current(SystemClock.elapsedRealtime())
             ?.soc?.takeIf { it in 0.0..100.0 }
-        source.text = if (live == null)
+        batterySource = if (live == null)
             t("Bateria inicial · 80% per defecte", "Batería inicial · 80% por defecto", "Starting battery · 80% default")
         else t("Bateria inicial · lectura OBD", "Batería inicial · lectura OBD", "Starting battery · OBD reading")
-        soc.progress = live?.toInt() ?: 80
+        soc = live?.toInt() ?: 80
     }
 
     private fun chooseDeparture() {
@@ -648,7 +689,6 @@ internal class PlannerScreen(
     private fun setDeparture(value: Long?) {
         if (departureMs == value) return
         departureMs = value
-        departure.text = departureLabel()
         invalidateRoutes()
     }
 
@@ -665,52 +705,4 @@ internal class PlannerScreen(
     private fun percent(kwh: Double) = "${labels.n(kwh / checkNotNull(plannedVehicle).capacityKwh * 100, 1)}%"
     private fun minutes(value: Double) = "${labels.n(value, 0)} min"
     private fun t(ca: String, es: String, en: String) = labels.t(ca, es, en)
-    private fun dp(value: Int) = (value * activity.resources.displayMetrics.density).toInt()
-    private fun column() = LinearLayout(activity).apply { orientation = LinearLayout.VERTICAL }
-    private fun text(value: String) = TextView(activity).apply {
-        text = value
-        textSize = 15f
-        setTextColor(Color.WHITE)
-        setPadding(dp(8), dp(6), dp(8), dp(6))
-    }
-    private fun slider(name: String, unit: String, maximum: Int, initial: Int, onChange: () -> Unit = {}): SeekBar {
-        val label = text("")
-        options.addView(label)
-        return SeekBar(activity).apply {
-            max = maximum
-            progress = initial
-            keyProgressIncrement = 1
-            contentDescription = name
-            fun showValue(value: Int) {
-                label.text = "$name · $value$unit"
-                if (Build.VERSION.SDK_INT >= 30) stateDescription = "$value$unit"
-            }
-            showValue(initial)
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(seekBar: SeekBar, progress: Int, fromUser: Boolean) {
-                    showValue(progress)
-                    if (fromUser) {
-                        onChange()
-                        if (busy || trip != null || status.text.isNotEmpty()) invalidateRoutes()
-                    }
-                }
-
-                override fun onStartTrackingTouch(seekBar: SeekBar) = Unit
-                override fun onStopTrackingTouch(seekBar: SeekBar) = Unit
-            })
-            options.addView(this, LinearLayout.LayoutParams(-1, dp(48)))
-        }
-    }
-
-    private fun button(name: String, action: () -> Unit) = Button(activity).apply {
-        text = name
-        isAllCaps = false
-        setOnClickListener { action() }
-    }
-    private fun row(vararg buttons: Button) = LinearLayout(activity).apply {
-        for (button in buttons) addView(button, LinearLayout.LayoutParams(0, -2, 1f))
-    }
-    private fun toggle(panel: View) { panel.visibility = if (panel.visibility == View.VISIBLE) View.GONE else View.VISIBLE }
-    private fun hideKeyboard() = activity.getSystemService(InputMethodManager::class.java)
-        .hideSoftInputFromWindow(page.windowToken, 0)
 }
