@@ -9,7 +9,8 @@ class VehicleTelemetry {
     data class Snapshot(val state: String, val sample: Sample?, val receivedAt: Long, val simulation: Boolean,
         val totals: Totals?, val cable: Double?, val cableAt: Long, val energy: Double?, val energyAt: Long,
         val soh: Double? = null, val sohAt: Long = 0, val obdConnected: Boolean = false, val vehicleId: String? = null) {
-        fun remaining(now: Long): Double = if (current(now) != null && energy != null && now >= energyAt && now - energyAt <= FRESH_MS) energy else Double.NaN
+        fun remaining(now: Long): Double = if (current(now) != null && energy != null &&
+            now >= energyAt && now - energyAt <= ENERGY_FRESH_MS) energy else Double.NaN
         fun soh(now: Long): Double = if (soh != null && now >= sohAt && now - sohAt <= FRESH_MS) soh else if (simulation) 96.0 else Double.NaN
         fun current(now: Long): Sample? = if ((state == "connected" || state == "demo") && sample != null &&
             now >= receivedAt && now - receivedAt <= FRESH_MS) sample else null
@@ -99,7 +100,8 @@ class VehicleTelemetry {
         synchronized(this) {
             val valid = value?.takeIf { it.isFinite() && it in 0.0..100.0 }
             if (active) stats.energy(wallTime, valid ?: Double.NaN)
-            published = published.copy(totals = if (active) totals() else published.totals, energy = valid, energyAt = elapsed)
+            published = published.copy(totals = if (active) totals() else published.totals,
+                energy = valid ?: published.energy, energyAt = if (valid != null) elapsed else published.energyAt)
         }
         changed()
     }
@@ -111,5 +113,9 @@ class VehicleTelemetry {
         changed()
     }
     private fun totals() = Totals(tripId, active, stats.count, stats.km, stats.consumed, stats.recovered, stats.consumption(), stats.summary())
-    companion object { val LIVE = VehicleTelemetry(); const val FRESH_MS = 10_000L }
+    companion object {
+        val LIVE = VehicleTelemetry()
+        const val FRESH_MS = 10_000L
+        const val ENERGY_FRESH_MS = 60_000L
+    }
 }

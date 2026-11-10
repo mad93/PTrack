@@ -31,8 +31,8 @@ configure<ApplicationExtension> {
         applicationId = "cat.ptrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 9
-        versionName = "0.2.7"
+        versionCode = 11
+        versionName = "0.2.9"
         manifestPlaceholders["ptrackAppLabel"] = "PTrack"
         testInstrumentationRunner = "cat.ptrack.SmokeInstrumentation"
         buildConfigField("String", "SOURCE_BRANCH", quoted(sourceBranch))
