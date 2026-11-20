@@ -7,6 +7,8 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
@@ -36,6 +38,7 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
@@ -257,7 +260,7 @@ private fun TripRow(entry: TripListEntry, selected: Boolean, allVehicles: Boolea
 @Composable
 internal fun TripDetailPane(
     entry: TripListEntry,
-    detail: TripDetail?,
+    detail: List<TripDetail>?,
     failed: Boolean,
     labels: Labels,
     onBack: () -> Unit,
@@ -268,26 +271,21 @@ internal fun TripDetailPane(
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onBack) { Text(backToTrips(labels)) }
-        Text(labels.t("Viatge", "Viaje", "Trip") + " #${entry.id}", style = type.headlineSmall)
+        Text(labels.t("Registre", "Registro", "Recording") + " #${entry.id}", style = type.headlineSmall)
         Text(entry.vehicle, style = type.titleMedium, color = colors.onSurfaceVariant)
         if (entry.demo) Text(simulationLabel(labels), style = type.labelLarge, color = colors.secondary)
         if (detail == null) {
             HistoryFeedback(labels, failed)
         } else {
-            val lines = TripSummaryText.lines(detail.summary, labels = labels)
-            FlowRow(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                maxItemsInEachRow = 2
-            ) {
-                lines.take(4).forEach { line ->
-                    Surface(Modifier.weight(1f), color = colors.primaryContainer,
-                        shape = MaterialTheme.shapes.medium) {
-                        SummaryMetric(line, Modifier.padding(12.dp), prominent = true)
-                    }
-                }
+            detail.forEach { section ->
+                val time = section.startMs?.let { DateFormat.getTimeInstance(DateFormat.SHORT, labels.locale).format(Date(it)) }
+                val title = if (section.charging != null) labels.t("Càrrega", "Carga", "Charging")
+                    else labels.t("Trajecte", "Trayecto", "Drive")
+                Text(listOfNotNull(title, time).joinToString(" · "), style = type.titleMedium)
+                if (section.charging != null) ChargingDetail(section, section.charging, labels)
+                else DrivingDetail(section, labels)
             }
+            if (detail.isEmpty()) Text(labels.t("Sense mostres", "Sin muestras", "No samples"))
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Button(onClick = { onExport("pdf") }, modifier = Modifier.fillMaxWidth()) {
                     Text(labels.t("Exporta informe PDF", "Exportar informe PDF", "Export PDF report"))
@@ -296,23 +294,71 @@ internal fun TripDetailPane(
                     Text(labels.t("Exporta registre complet JSON", "Exportar registro completo JSON", "Export full JSON log"))
                 }
             }
-            Text(labels.t("Detall del trajecte", "Detalle del trayecto", "Trip details"), style = type.titleMedium)
-            val altitude = if (detail.ascent != null && detail.descent != null) {
-                labels.n(detail.ascent, 0) + " / " + labels.n(detail.descent, 0) + " m"
-            } else "—"
-            val metrics = lines.drop(4) + TripSummaryText.Line(
-                labels.t("Pujada / baixada GPS", "Ascenso / descenso GPS", "GPS ascent / descent"), altitude
-            )
-            Surface(Modifier.fillMaxWidth(), color = colors.surfaceContainer, shape = MaterialTheme.shapes.large) {
-                Column(Modifier.padding(horizontal = 12.dp)) {
-                    metrics.forEachIndexed { index, line ->
-                        if (index > 0) HorizontalDivider(color = colors.outlineVariant)
-                        SummaryMetric(line, Modifier.padding(vertical = 8.dp))
-                    }
-                }
+        }
+    }
+}
+
+@Composable
+private fun DrivingDetail(detail: TripDetail, labels: Labels) {
+    val colors = MaterialTheme.colorScheme
+    val lines = TripSummaryText.lines(detail.summary, labels = labels)
+    FlowRow(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        maxItemsInEachRow = 2
+    ) {
+        lines.take(4).forEach { line ->
+            Surface(Modifier.weight(1f), color = colors.primaryContainer,
+                shape = MaterialTheme.shapes.medium) {
+                SummaryMetric(line, Modifier.padding(12.dp), prominent = true)
             }
         }
     }
+    val altitude = if (detail.ascent != null && detail.descent != null) {
+        labels.n(detail.ascent, 0) + " / " + labels.n(detail.descent, 0) + " m"
+    } else "—"
+    val metrics = lines.drop(4) + TripSummaryText.Line(
+        labels.t("Pujada / baixada GPS", "Ascenso / descenso GPS", "GPS ascent / descent"), altitude
+    )
+    Surface(Modifier.fillMaxWidth(), color = colors.surfaceContainer, shape = MaterialTheme.shapes.large) {
+        Column(Modifier.padding(horizontal = 12.dp)) {
+            metrics.forEachIndexed { index, line ->
+                if (index > 0) HorizontalDivider(color = colors.outlineVariant)
+                SummaryMetric(line, Modifier.padding(vertical = 8.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun ChargingDetail(detail: TripDetail, section: RecordingSection, labels: Labels) {
+    val summary = detail.summary
+    val duration = summary.durationMs / 60_000.0
+    Text("${labels.n(summary.incoming, 2)} kWh · ${labels.n(duration, 1)} min · " +
+        "${labels.n(summary.startSoc, 1)} % → ${labels.n(summary.endSoc, 1)} %")
+    val powerLabel = labels.t("Potència de càrrega", "Potencia de carga", "Charging power")
+    Text("$powerLabel · ${labels.n(summary.maxIncomingKw, 1)} kW " + labels.t("màx.", "máx.", "max."))
+    val color = MaterialTheme.colorScheme.primary
+    val axis = MaterialTheme.colorScheme.outlineVariant
+    val samples = section.samples
+    val start = samples.first().time
+    Canvas(Modifier.fillMaxWidth().height(100.dp).semantics { contentDescription = powerLabel }) {
+        val elapsed = summary.durationMs.coerceAtLeast(1)
+        fun point(sample: Sample) = Offset(
+            size.width * ((sample.time - start).toDouble() / elapsed).toFloat(),
+            size.height * (1 - (-sample.power() / summary.maxIncomingKw).toFloat())
+        )
+        drawLine(axis, Offset(0f, size.height), Offset(size.width, size.height))
+        var previous = point(samples.first())
+        drawCircle(color, radius = 2.dp.toPx(), center = previous)
+        for (index in 1 until samples.size) {
+            val next = point(samples[index])
+            drawLine(color, previous, next, strokeWidth = 2.dp.toPx())
+            previous = next
+        }
+    }
+    Text("0 – ${labels.n(duration, 1)} min", style = MaterialTheme.typography.labelMedium)
 }
 
 @Composable

@@ -16,7 +16,9 @@ internal data class TripListEntry(
 internal data class TripDetail(
     val summary: TripSummary,
     val ascent: Double?,
-    val descent: Double?
+    val descent: Double?,
+    val startMs: Long? = null,
+    val charging: RecordingSection? = null
 )
 
 internal class TripHistory(private val store: Store) {
@@ -46,11 +48,14 @@ internal class TripHistory(private val store: Store) {
         }
     }
 
-    fun detail(id: Long): TripDetail {
-        val stats = TripStats()
-        store.samples(id).forEach(stats::add)
-        return TripDetail(store.summary(id), stats.ascent.takeIf { stats.hasAltitude },
-            stats.descent.takeIf { stats.hasAltitude })
+    fun detail(id: Long): List<TripDetail> {
+        val sections = store.sections(id)
+        return sections.map { section ->
+            val stats = store.sectionStats(id, section, sections.size > 1)
+            TripDetail(stats.summary(), stats.ascent.takeIf { stats.hasAltitude },
+                stats.descent.takeIf { stats.hasAltitude }, section.samples.first().time,
+                section.takeIf { it.charging })
+        }
     }
 
     private fun LocalDate.startMs(zone: ZoneId) = atStartOfDay(zone).toInstant().toEpochMilli()

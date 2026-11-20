@@ -4,7 +4,13 @@ Revisió: 8/11/2026. **L'usuari confirma que PTrack Prova cotxe funciona al Peug
 
 ## Ús habitual i actualitzacions
 
-El 10/11/2026 s’ha preparat la **0.2.9 (11)** de la PTrack habitual, amb un minut de vigència per a l’última lectura vàlida dels kWh restants. L’APK s’ha verificat i copiat al Pixel, i s’ha iniciat l’actualització amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect demana autoritzar-ne l’anàlisi. [Registre de validació](VALIDATION.md#ptrack-029-al-pixel--10112026)
+El 12/11/2026 s’ha actualitzat la PTrack habitual a **0.2.10 (12)** amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect ha analitzat l’APK amb l’autorització de l’usuari. S’han verificat l’origen i el servei d’Android Auto amb Android Auto 18.0.664264 al Pixel 10, s’ha aturat Shizuku i s’ha obert PTrack. Queden pendents la comprovació del registre mixt real i la prova al Peugeot. [Registre de validació](VALIDATION.md#separació-de-càrregues-i-trajectes--12112026)
+
+El 10/11/2026 s'ha actualitzat **PTrack Prova cotxe 0.2.9-car-test-ceuta (13)** amb KingInstaller i Shizuku després de l'anàlisi de Play Protect. S'han verificat l'origen i el servei i s'ha aturat Shizuku. El botó **Actualitza** ha completat la generació i l'activació de Ceuta al Pixel. Queda pendent la prova al Peugeot. [Registre de la prova](VALIDATION.md#botó-actualitza-per-a-ceuta--compilació-pilot-del-10112026)
+
+El 10/11/2026 s'ha instal·lat **PTrack Prova cotxe 0.2.9-car-test (11)** (`cat.ptrack.cartest`) amb KingInstaller i Shizuku. S'han verificat l'origen i el servei i s'ha aturat Shizuku. El graf de Ceuta, generat al Pixel en un directori temporal separat, s'ha activat només a la variant de proves. La PTrack habitual conserva el mapa peninsular. Queda pendent la prova al Peugeot. [Registre de validació](VALIDATION.md#pilot-de-generació-de-ceuta-al-pixel--10112026)
+
+El 10/11/2026 s’ha preparat la **0.2.9 (11)** de la PTrack habitual, amb un minut de vigència per a l’última lectura vàlida dels kWh restants. L’APK s’ha verificat i copiat al Pixel, i s’ha iniciat l’actualització amb KingInstaller 2.5 i Shizuku 13.6.0. L’usuari ha confirmat el pas de Play Protect. La verificació de la instal·lació queda pendent de reconnectar el Pixel per ADB. [Registre de validació](VALIDATION.md#ptrack-029-al-pixel--10112026)
 
 El 8/11/2026 a les 16:33 CET s’ha actualitzat la PTrack habitual a **0.2.6 (8)** amb KingInstaller 2.5 i Shizuku 13.6.0, després de l’anàlisi autoritzada de Play Protect. S’han verificat l’APK instal·lada, l’origen d’instal·lació i el servei d’Android Auto. Shizuku s’ha aturat. Queden pendents la prova de les rutes a Google Maps i Waze i la prova al Peugeot. [Registre de validació](VALIDATION.md#ptrack-026-al-pixel--8112026)
 

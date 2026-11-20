@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import java.time.Instant
 
 plugins {
@@ -18,6 +19,7 @@ val sourceCommit = sourceGit("rev-parse", "--short=12", "HEAD") ?: "unknown"
 val sourceStatus = sourceGit("status", "--porcelain", "--untracked-files=normal")
 val sourceState = when { sourceStatus == null -> "unknown"; sourceStatus.isEmpty() -> "clean"; else -> "modified" }
 val buildTimeUtc = Instant.now().toString()
+val ceutaBuilder = providers.gradleProperty("ptrackCeutaBuilder").orNull?.let(::file)
 fun quoted(value: String) = "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 providers.gradleProperty("ptrackBuildRoot").orNull?.let {
@@ -31,8 +33,8 @@ configure<ApplicationExtension> {
         applicationId = "cat.ptrack"
         minSdk = 26
         targetSdk = 35
-        versionCode = 11
-        versionName = "0.2.9"
+        versionCode = 12
+        versionName = "0.2.10"
         manifestPlaceholders["ptrackAppLabel"] = "PTrack"
         testInstrumentationRunner = "cat.ptrack.SmokeInstrumentation"
         buildConfigField("String", "SOURCE_BRANCH", quoted(sourceBranch))
@@ -51,11 +53,16 @@ configure<ApplicationExtension> {
         create("carTest") {
             initWith(getByName("release"))
             applicationIdSuffix = ".cartest"
-            versionNameSuffix = "-car-test"
+            versionNameSuffix = if (ceutaBuilder == null) "-car-test" else "-car-test-ceuta"
             manifestPlaceholders["ptrackAppLabel"] = "PTrack Prova cotxe"
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
         }
+    }
+    if (ceutaBuilder != null) {
+        require(ceutaBuilder.resolve("assets/ceuta-builder/files.json").isFile) { "Prepare the Ceuta builder first" }
+        sourceSets.getByName("carTest").assets.directories.add(ceutaBuilder.resolve("assets").absolutePath)
+        sourceSets.getByName("carTest").jniLibs.directories.add(ceutaBuilder.resolve("jniLibs").absolutePath)
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -64,6 +71,16 @@ configure<ApplicationExtension> {
     // AGP 9 built-in Kotlin does not compile Kotlin files added to java directories.
     sourceSets.getByName("test").kotlin.directories.add(rootProject.file("core-tests").absolutePath)
     testOptions.unitTests.isReturnDefaultValues = false
+}
+
+if (ceutaBuilder != null) {
+    configure<ApplicationAndroidComponentsExtension> {
+        onVariants(selector().withBuildType("carTest")) { variant ->
+            variant.packaging.jniLibs.useLegacyPackaging.set(true)
+            variant.packaging.jniLibs.keepDebugSymbols.add("**/libceuta_*.so")
+            variant.outputs.forEach { it.versionCode.set(13) }
+        }
+    }
 }
 
 dependencies {

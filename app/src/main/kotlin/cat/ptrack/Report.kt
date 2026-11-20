@@ -16,58 +16,92 @@ class Report(private val context: Context) {
     fun file(id: Long) = File(File(context.filesDir, "reports"), "ptrack-$id-${l.locale.language}.pdf")
     fun generate(store: Store, id: Long): File = synchronized(REPORT_LOCK) { generateLocked(store, id) }
     private fun generateLocked(store: Store, id: Long): File {
-        val samples = store.samples(id); val stats = TripStats(); samples.forEach(stats::add)
+        val sections = store.sections(id).ifEmpty { listOf(RecordingSection(emptyList(), false)) }
         val output = file(id); val parent = checkNotNull(output.parentFile)
         if (!parent.isDirectory && !parent.mkdirs()) throw IOException("Report directory")
         val temporary = File(output.path + ".tmp")
         val document = PdfDocument()
+        val totalPages = sections.size + sections.count { !it.charging }
+        val vehicle = store.tripVehicle(id)
+        val demo = store.isDemo(id)
         try {
-            var page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 1).create())
-            var c = page.canvas
-            title(c, id, store.isDemo(id))
-            text(c, l.t("INFORME DE VIATGE", "INFORME DE VIAJE", "TRIP REPORT"), 36, 103, 11, 0xFF56746D.toInt())
-            val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, l.locale)
-            text(c, if (stats.count > 0) date.format(Date(stats.start)) + " → " + date.format(Date(stats.end)) else "—", 36, 130, 11, Color.DKGRAY)
-            val rows = listOf(
-                l.t("Càrrega inicial / final", "Carga inicial / final", "Start / end charge") to (l.n(stats.startSoc, 1) + " % → " + l.n(stats.endSoc, 1) + " %"),
-                l.t("Distància registrada", "Distancia registrada", "Recorded distance") to (l.n(stats.km, 2) + " km"),
-                l.t("Durada total", "Duración total", "Total duration") to (l.n((stats.end - stats.start) / 60000.0, 1) + " min"),
-                l.t("Velocitat mitjana registrada", "Velocidad media registrada", "Recorded average speed") to (l.n(stats.averageSpeed(), 1) + " km/h"),
-                l.t("Consum mitjà net", "Consumo medio neto", "Net average consumption") to (l.n(stats.consumption(), 2) + " kWh/100 km"),
-                l.t("Energia consumida / recuperada", "Energía consumida / recuperada", "Consumed / recovered energy") to (l.n(stats.consumed, 3) + " / " + l.n(stats.recovered, 3) + " kWh"),
-                l.t("Pujada / baixada estimada (GPS)", "Ascenso / descenso estimado (GPS)", "Estimated ascent / descent (GPS)") to (if (stats.hasAltitude) l.n(stats.ascent, 0) + " / " + l.n(stats.descent, 0) + " m" else "—"),
-                l.t("Cobertura de lectures", "Cobertura de lecturas", "Reading coverage") to (l.n(stats.coveredSeconds / 60, 1) + " min · " + stats.count + " " + l.t("mostres", "muestras", "samples")))
-            var y = 169
-            for ((label, value) in rows) { text(c, label, 36, y, 11, Color.DKGRAY); text(c, value, 340, y, 11, Color.BLACK); y += 31 }
-            chart(c, samples, { it.soc }, l.signal("soc"), "%", 443, 150, 0.0, 100.0)
-            lines(c, listOf(
-                l.t("Vehicle", "Vehículo", "Vehicle") + " · " + store.tripVehicle(id),
-                l.t("Potència = V × A / 1000. Signe +: consum; signe −: entrada a la bateria.", "Potencia = V × A / 1000. Signo +: consumo; signo −: entrada a batería.", "Power = V × A / 1000. Positive: discharge; negative: energy into battery."),
-                l.t("Energia i distància: integració trapezoïdal de lectures OBD vàlides.", "Energía y distancia: integración trapezoidal de lecturas OBD válidas.", "Energy and distance: trapezoidal integration of valid OBD readings."),
-                l.t("Els buits de més de 10 s no s’integren. La mitjana inclou les aturades registrades.", "Los huecos de más de 10 s no se integran. La media incluye paradas registradas.", "Gaps over 10 s are excluded. Average speed includes recorded stops."),
-                l.t("Altitud GPS: precisió vertical ≤10 m; filtre de desnivell de 5 m. És una estimació.", "Altitud GPS: precisión vertical ≤10 m; filtro de desnivel de 5 m. Es una estimación.", "GPS altitude: vertical accuracy ≤10 m; 5 m elevation filter. This is an estimate."),
-                l.t("— indica dada no disponible. Les dades del viatge es conserven al mòbil.", "— indica dato no disponible. Los datos del viaje se guardan en el móvil.", "— means unavailable. Trip data is retained on the phone.")), 36, 657)
-            text(c, "Profile: Esa Pelttari · CC BY 4.0 · github.com/EsaHub/EscoEvObdScanner", 36, 780, 8, Color.GRAY)
-            footer(c, 1); document.finishPage(page)
-            page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, 2).create()); c = page.canvas
-            title(c, id, store.isDemo(id))
-            chart(c, samples, Sample::power, l.t("Potència de bateria", "Potencia de batería", "Battery power"), "kW", 100, 130, Double.NaN, Double.NaN)
-            chart(c, samples, { it.current }, l.signal("current"), "A", 270, 130, Double.NaN, Double.NaN)
-            chart(c, samples, { it.speed }, l.signal("speed"), "km/h", 440, 130, 0.0, Double.NaN)
-            chart(c, samples, { it.altitude ?: Double.NaN }, l.t("Altitud GPS", "Altitud GPS", "GPS altitude"), "m", 610, 115, Double.NaN, Double.NaN)
-            footer(c, 2); document.finishPage(page)
+            var number = 1
+            for (section in sections) {
+                val stats = section.stats()
+                if (section.charging) {
+                    chargingPage(document, number, totalPages, id, vehicle, demo, section.samples, stats)
+                    number++
+                } else {
+                    drivingPages(document, number, totalPages, id, vehicle, demo, section.samples, stats)
+                    number += 2
+                }
+            }
             FileOutputStream(temporary).use { document.writeTo(it); it.fd.sync() }
         } finally { document.close() }
         if (!temporary.renameTo(output)) throw IOException("Cannot finalize PDF")
         return output
     }
-    private fun title(c: Canvas, id: Long, demo: Boolean) {
+    private fun drivingPages(document: PdfDocument, number: Int, totalPages: Int, id: Long, vehicle: String, demo: Boolean,
+        samples: List<Sample>, stats: TripStats) {
+        var page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, number).create())
+        var c = page.canvas
+        title(c, id, vehicle, demo)
+        text(c, l.t("INFORME DE VIATGE", "INFORME DE VIAJE", "TRIP REPORT"), 36, 103, 11, 0xFF56746D.toInt())
+        val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, l.locale)
+        text(c, if (stats.count > 0) date.format(Date(stats.start)) + " → " + date.format(Date(stats.end)) else "—", 36, 130, 11, Color.DKGRAY)
+        val rows = listOf(
+            l.t("Càrrega inicial / final", "Carga inicial / final", "Start / end charge") to (l.n(stats.startSoc, 1) + " % → " + l.n(stats.endSoc, 1) + " %"),
+            l.t("Distància registrada", "Distancia registrada", "Recorded distance") to (l.n(stats.km, 2) + " km"),
+            l.t("Durada total", "Duración total", "Total duration") to (l.n((stats.end - stats.start) / 60000.0, 1) + " min"),
+            l.t("Velocitat mitjana registrada", "Velocidad media registrada", "Recorded average speed") to (l.n(stats.averageSpeed(), 1) + " km/h"),
+            l.t("Consum mitjà net", "Consumo medio neto", "Net average consumption") to (l.n(stats.consumption(), 2) + " kWh/100 km"),
+            l.t("Energia consumida / recuperada", "Energía consumida / recuperada", "Consumed / recovered energy") to (l.n(stats.consumed, 3) + " / " + l.n(stats.recovered, 3) + " kWh"),
+            l.t("Pujada / baixada estimada (GPS)", "Ascenso / descenso estimado (GPS)", "Estimated ascent / descent (GPS)") to (if (stats.hasAltitude) l.n(stats.ascent, 0) + " / " + l.n(stats.descent, 0) + " m" else "—"),
+            l.t("Cobertura de lectures", "Cobertura de lecturas", "Reading coverage") to (l.n(stats.coveredSeconds / 60, 1) + " min · " + stats.count + " " + l.t("mostres", "muestras", "samples")))
+        var y = 169
+        for ((label, value) in rows) { text(c, label, 36, y, 11, Color.DKGRAY); text(c, value, 340, y, 11, Color.BLACK); y += 31 }
+        chart(c, samples, { it.soc }, l.signal("soc"), "%", 443, 150, 0.0, 100.0)
+        lines(c, listOf(
+            l.t("Potència = V × A / 1000. Signe +: consum; signe −: entrada a la bateria.", "Potencia = V × A / 1000. Signo +: consumo; signo −: entrada a batería.", "Power = V × A / 1000. Positive: discharge; negative: energy into battery."),
+            l.t("Energia i distància: integració trapezoïdal de lectures OBD vàlides.", "Energía y distancia: integración trapezoidal de lecturas OBD válidas.", "Energy and distance: trapezoidal integration of valid OBD readings."),
+            l.t("Els buits de més de 10 s no s’integren. La mitjana inclou les aturades registrades.", "Los huecos de más de 10 s no se integran. La media incluye paradas registradas.", "Gaps over 10 s are excluded. Average speed includes recorded stops."),
+            l.t("Altitud GPS: precisió vertical ≤10 m; filtre de desnivell de 5 m. És una estimació.", "Altitud GPS: precisión vertical ≤10 m; filtro de desnivel de 5 m. Es una estimación.", "GPS altitude: vertical accuracy ≤10 m; 5 m elevation filter. This is an estimate."),
+            l.t("— indica dada no disponible. Les dades del viatge es conserven al mòbil.", "— indica dato no disponible. Los datos del viaje se guardan en el móvil.", "— means unavailable. Trip data is retained on the phone.")), 36, 657)
+        text(c, "Profile: Esa Pelttari · CC BY 4.0 · github.com/EsaHub/EscoEvObdScanner", 36, 780, 8, Color.GRAY)
+        footer(c, number, totalPages); document.finishPage(page)
+        page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, number + 1).create()); c = page.canvas
+        title(c, id, vehicle, demo)
+        chart(c, samples, Sample::power, l.t("Potència de bateria", "Potencia de batería", "Battery power"), "kW", 100, 130, Double.NaN, Double.NaN)
+        chart(c, samples, { it.current }, l.signal("current"), "A", 270, 130, Double.NaN, Double.NaN)
+        chart(c, samples, { it.speed }, l.signal("speed"), "km/h", 440, 130, 0.0, Double.NaN)
+        chart(c, samples, { it.altitude ?: Double.NaN }, l.t("Altitud GPS", "Altitud GPS", "GPS altitude"), "m", 610, 115, Double.NaN, Double.NaN)
+        footer(c, number + 1, totalPages); document.finishPage(page)
+    }
+
+    private fun chargingPage(document: PdfDocument, number: Int, totalPages: Int, id: Long, vehicle: String, demo: Boolean,
+        samples: List<Sample>, stats: TripStats) {
+        val page = document.startPage(PdfDocument.PageInfo.Builder(595, 842, number).create())
+        val c = page.canvas
+        title(c, id, vehicle, demo)
+        text(c, l.t("SESSIÓ DE CÀRREGA", "SESIÓN DE CARGA", "CHARGING SESSION"), 36, 103, 11, Color.DKGRAY)
+        val date = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, l.locale)
+        text(c, date.format(Date(stats.start)) + " → " + date.format(Date(stats.end)), 36, 130, 11, Color.DKGRAY)
+        text(c, l.n(stats.recovered, 3) + " kWh · " + l.n((stats.end - stats.start) / 60_000.0, 1) + " min",
+            36, 158, 11, Color.DKGRAY)
+        chart(c, samples, { -it.power() }, l.t("Potència de càrrega", "Potencia de carga", "Charging power"),
+            "kW", 205, 235, 0.0, Double.NaN)
+        chart(c, samples, { it.soc }, l.signal("soc"), "%", 475, 235, 0.0, 100.0)
+        footer(c, number, totalPages)
+        document.finishPage(page)
+    }
+
+    private fun title(c: Canvas, id: Long, vehicle: String, demo: Boolean) {
         text(c, "PTrack", 36, 52, 26, 0xFF123C33.toInt())
-        text(c, "Peugeot e-2008 · #$id", 36, 76, 11, Color.DKGRAY)
+        text(c, "$vehicle · #$id", 36, 76, 11, Color.DKGRAY)
         if (demo) text(c, l.t("SIMULACIÓ", "SIMULACIÓN", "SIMULATION"), 420, 52, 13, 0xFFAE4B20.toInt())
     }
-    private fun footer(c: Canvas, page: Int) {
-        text(c, "PTrack · " + l.t("Lectura OBD sense escriptures", "Lectura OBD sin escrituras", "Read-only OBD") + " · $page / 2", 36, 813, 9, Color.GRAY)
+    private fun footer(c: Canvas, page: Int, totalPages: Int) {
+        text(c, "PTrack · " + l.t("Lectura OBD sense escriptures", "Lectura OBD sin escrituras", "Read-only OBD") + " · $page / $totalPages", 36, 813, 9, Color.GRAY)
     }
     private fun lines(c: Canvas, lines: List<String>, x: Int, y: Int) {
         var yy = y

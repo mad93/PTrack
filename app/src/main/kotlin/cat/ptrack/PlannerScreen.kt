@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,7 +44,7 @@ import java.util.concurrent.Future
 internal class PlannerScreen(
     private val activity: Activity,
     private val labels: Labels,
-    private val importMap: () -> Unit,
+    private val openSettings: () -> Unit,
     private val locate: () -> Unit,
     private val navigate: (NavigationPlan, Boolean) -> Unit,
     private val showCharger: (String, String) -> Unit
@@ -61,6 +60,7 @@ internal class PlannerScreen(
     private var calculation = 0
     private var disposed = false
     private var busy by mutableStateOf(false)
+    val isCalculating get() = busy
     private var installed by mutableStateOf(false)
     private var importing by mutableStateOf(false)
     private var manualSoc = false
@@ -616,16 +616,13 @@ internal class PlannerScreen(
             }
         }
 
-        PlannerPanel {
-            Text(t("Mapa de rutes", "Mapa de rutas", "Routing map"), style = MaterialTheme.typography.titleMedium)
-            if (!installed) ResultNote(t("Cal importar el graf de carreteres per calcular rutes.",
-                "Importa el mapa de carreteras para calcular rutas.", "Import a routing map to calculate routes."))
-            OutlinedButton(onClick = importMap, enabled = !importing && !busy) {
-                Text(when {
-                    importing -> t("Important el mapa…", "Importando el mapa…", "Importing map…")
-                    installed -> t("Actualitza el mapa de rutes", "Actualiza el mapa de rutas", "Update routing map")
-                    else -> t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map")
-                })
+        if (importing) {
+            ResultNote(t("Important el mapa de rutes…", "Importando el mapa de rutas…", "Importing the routing map…"))
+        } else if (!installed) {
+            ResultNote(t("Importa un mapa a Configuració per calcular rutes.",
+                "Importa un mapa en Configuración para calcular rutas.", "Import a map in Settings to calculate routes."))
+            TextButton(onClick = openSettings) {
+                Text(Destination.SETTINGS.label(labels))
             }
         }
     }

@@ -1,10 +1,33 @@
 # Validació
 
+## Separació de càrregues i trajectes — 12/11/2026
+
+- L’historial aplica la separació a les mostres desades. Amb el senyal de cable confirmat, classifica el tram estacionari amb entrada de potència com a càrrega. A falta de confirmació, requereix almenys 20 s de lectures consecutives a ≤1 km/h i amb potència inferior a −0,05 kW, sense buits de més de 10 s.
+- Les proves unitàries cobreixen un registre amb regeneració, càrrega i represa de la conducció, i un altre amb aturades breus i buits OBD. Queda pendent comprovar el registre real del Pixel i el PDF en execució al dispositiu.
+- Han passat les 34 proves de `testDebugUnitTest` i `assembleDebug`. S’ha verificat la còpia de seguretat del 12/11/2026 abans d’actualitzar la PTrack habitual a **0.2.10 (12)**. L’APK conserva el certificat de la versió anterior. SHA-256 verificat al PC, a Baixades i a l’APK instal·lada: `5543074d49a24fc6419ae78c9b0635f9e092488e737308de90500ada24da274f`.
+- Actualització completada amb KingInstaller 2.5 i Shizuku 13.6.0 després de l’anàlisi de Play Protect autoritzada per l’usuari. Al Pixel 10 amb Android 17 i Android Auto 18.0.664264, s’han verificat `com.android.vending` com a instal·lador, `com.google.android.packageinstaller` com a iniciador i el servei d’Android Auto resoluble. Shizuku s’ha aturat i s’ha obert la pantalla principal de PTrack. Queda pendent la prova al Peugeot.
+
+## Botó Actualitza per a Ceuta — compilació pilot del 10/11/2026
+
+- La compilació optativa `cat.ptrack.cartest` 0.2.9-car-test-ceuta (12) inclou el generador ARM64. **Configuració → Mapa de rutes → Actualitza** baixa l'extracte de Geofabrik i l'elevació de Mapzen, construeix el graf al directori privat de la variant de proves i l'activa després de validar la ruta. El procés d'actualització no passa pel selector de fitxers.
+- Han passat `assembleCarTest`, `lintVitalCarTest` i les 32 proves de `testDebugUnitTest`. S'han verificat els 60 binaris ARM64 dins l'APK, el paquet i el certificat de la versió anterior. L'APK `PTrack-Prova-cotxe-Actualitza-Ceuta.apk` té SHA-256 `EA2BB522B2E2332428D91C38CB16F54B4C718D36289F5963F4D77396597C5D95`.
+- Al Pixel, la versió 12 s'ha actualitzat amb KingInstaller i Shizuku. S'han verificat l'origen i el servei d'Android Auto i s'ha aturat Shizuku. El botó **Actualitza** ha executat el flux de descàrrega, però Android ha interromput el generador de Linux amb codi de sortida 159 (`SIGSYS`) abans de validar i activar cap graf. El punter del mapa actiu de `cat.ptrack` conserva el SHA-256 de la prova anterior.
+- La versió 13 substitueix la glibc de Debian per la glibc de Termux adaptada a Android. El generador ha completat una prova per ADB en **2,25 s**. Han passat `assembleCarTest` i `lintVitalCarTest`. L'APK `PTrack-Prova-cotxe-Actualitza-Ceuta-v13.apk` conserva el certificat i el SHA-256 local i al Pixel és `5DE679A5C7DDE6E2BB12B3E58F97230D9734EFE660095A5586BC89CD3FD8C95E`. Actualitzada amb KingInstaller i Shizuku després de l'anàlisi de Play Protect. S'han verificat l'instal·lador `com.android.vending`, l'iniciador `com.google.android.packageinstaller` i el servei resoluble. Shizuku s'ha aturat.
+- Amb la versió 13, un toc a **Configuració → Mapa de rutes → Actualitza** ha completat la descàrrega, la generació i la comprovació de la ruta a l'app. La pantalla ha passat de **Darrera activació · 20:35** a **Darrera activació · 21:59** el 10/11/2026. L'actualització s'ha executat només a `cat.ptrack.cartest`. Queden pendents la prova peninsular i la prova al Peugeot.
+
+## Pilot de generació de Ceuta al Pixel — 10/11/2026
+
+- El Pixel 10 amb Android 17 ha executat `valhalla_build_tiles` 3.9.1 per a Linux ARM64 amb el carregador de glibc de Debian. L'execució s'ha fet per ADB en un directori temporal separat de les apps, amb l'extracte de Geofabrik del 3/11/2026 i l'elevació del pilot anterior. Amb dos fils, el graf s'ha generat en **2,21 s**. Les bases de límits administratius i fusos horaris s'han omès en aquesta prova.
+- El Pixel ha empaquetat les tessel·les en un TAR de **1.021.952 bytes** i ha calculat amb aquest graf la ruta de comprovació de **7,114 km** amb **239 mostres d'elevació** entre 1,9 i 73,3 m. El ZIP d'importació s'ha muntat a l'ordinador amb el TAR del Pixel. La generació integrada a l'app i la prova peninsular queden pendents.
+- `assembleCarTest` ha compilat `cat.ptrack.cartest` 0.2.9-car-test (11) amb el certificat de la variant anterior. L'APK `PTrack-Prova-cotxe-Ceuta-0.2.9.apk` i el ZIP `PTrack-Ceuta-generat-al-Pixel.zip` són a Baixades del Pixel i els seus SHA-256 coincideixen amb els fitxers locals. Instal·lació completada amb KingInstaller 2.5 i Shizuku 13.6.0. Android informa de `com.android.vending` com a instal·lador i `com.google.android.packageinstaller` com a iniciador. El servei d'Android Auto és resoluble i Shizuku s'ha aturat.
+- La variant de proves ha importat el ZIP i ha mostrat **Darrera activació · 10 de nov. 2026 20:35** a **Configuració → Mapa de rutes**. A `cat.ptrack`, el fitxer que assenyala el mapa actiu conserva el mateix SHA-256 i el TAR peninsular continua ocupant **2.178.744.320 bytes**. La prova al Peugeot queda pendent.
+
 ## PTrack 0.2.9 al Pixel — 10/11/2026
 
 - L’última lectura vàlida de kWh es manté fins a 60 s mentre hi ha dades recents del vehicle. Una lectura d’energia invàlida conserva el valor i el seu temps original.
 - Han passat les 32 proves de `testDebugUnitTest` i `assembleDebug` des de `main` (`b49e86917f07`). L’APK `artifacts/ptrack-pixel-029-20261110/PTrack-0.2.9.apk` és de `cat.ptrack` 0.2.9 (11) i conserva el certificat de la 0.2.8. SHA-256 local i al Pixel: `CCA2CB4496F9F5B7C858B3DEA4EEC447389AFEE7C9B86C3E36ECDB9D61FCD4A8`.
 - Còpia de seguretat exportada a Baixades i verificada amb `gzip -t` (`PTrack-20261110-180431.ptrack.json.gz`). Actualització iniciada amb KingInstaller 2.5 i Shizuku 13.6.0. Play Protect demana autoritzar l’anàlisi i Android encara informa de la 0.2.8 (10).
+- L’usuari ha confirmat el pas de Play Protect. El Pixel ja no apareix a `adb devices`. Queden pendents la comprovació de la versió, l’origen i el servei d’Android Auto, i la comprovació de l’estat de Shizuku.
 
 ## PTrack 0.2.8 al Pixel — 9/11/2026
 

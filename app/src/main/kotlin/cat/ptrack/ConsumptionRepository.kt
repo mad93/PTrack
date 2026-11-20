@@ -1,7 +1,6 @@
 package cat.ptrack
 
 import android.content.ContentValues
-import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import cat.ptrack.ConsumptionModel.*
 import kotlin.math.floor
@@ -23,18 +22,20 @@ class ConsumptionRepository(
         db.rawQuery("SELECT id FROM trips WHERE vehicle_id=? AND demo=0 AND status='complete' ORDER BY start DESC,id DESC",
             arrayOf(vehicleId)).use { trips ->
             while (trips.moveToNext()) {
-                val samples = mutableListOf<Sample>()
-                db.rawQuery("SELECT time,soc,voltage,current,speed,lat,lon,altitude FROM samples WHERE trip=? ORDER BY time,id", arrayOf(trips.getString(0))).use { c ->
-                    while (c.moveToNext()) samples.add(Sample(c.getLong(0), required(c, 1), required(c, 2), required(c, 3), required(c, 4),
-                        optional(c, 5), optional(c, 6), optional(c, 7), null))
-                }
-                learner.addTrip(samples)
-                if (capacityEstimates != null && capacityEstimates.size < PlanningEnergy.MAX_CAPACITY_TRIPS) {
-                    val stats = TripStats()
-                    samples.forEach(stats::add)
+                val id = trips.getLong(0)
+                val sections = store.sections(id)
+                val driving = sections.filterNot { it.charging }
+                learner.addTrip(buildList<Sample?> {
+                    for (section in driving) {
+                        if (isNotEmpty()) add(null)
+                        addAll(section.samples)
+                    }
+                })
+                for (section in driving) {
+                    if (capacityEstimates == null || capacityEstimates.size >= PlanningEnergy.MAX_CAPACITY_TRIPS) break
+                    val stats = store.sectionStats(id, section, sections.size > 1)
                     if (stats.startSoc - stats.endSoc < 10 || stats.count < 30) continue
-                    store.addEnergyReadings(trips.getLong(0), stats)
-                    val stationaryCharging = samples.any { it.valid() && it.speed <= 1 && it.power() < -3 }
+                    val stationaryCharging = section.samples.any { it.valid() && it.speed <= 1 && it.power() < -3 }
                     PlanningEnergy.capacityFrom(stats.summary(), stationaryCharging)?.let(capacityEstimates::add)
                 }
             }
@@ -78,8 +79,6 @@ class ConsumptionRepository(
             val result = bucket.estimate(); db.setTransactionSuccessful(); return result
         } finally { db.endTransaction() }
     }
-    private fun required(c: Cursor, index: Int) = optional(c, index) ?: Double.NaN
-    private fun optional(c: Cursor, index: Int): Double? = if (c.isNull(index)) null else c.getDouble(index)
     internal class MissingVehicleCapacity : IllegalStateException()
 
     companion object {

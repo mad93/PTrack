@@ -104,9 +104,9 @@ class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOp
         }
         writableDatabase.insertOrThrow("samples", null, row)
     }
-    fun reading(trip: Long, signal: String, value: Double?, raw: String?) {
+    fun reading(trip: Long, signal: String, value: Double?, raw: String?, time: Long = System.currentTimeMillis()) {
         val row = ContentValues().apply {
-            put("trip", trip); put("time", System.currentTimeMillis()); put("signal", signal)
+            put("trip", trip); put("time", time); put("signal", signal)
             put("value", value?.takeIf { it.isFinite() }); put("raw", raw)
         }
         writableDatabase.insertOrThrow("readings", null, row)
@@ -121,13 +121,25 @@ class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOp
     }
     private fun number(c: Cursor, n: Int): Double? = if (c.isNull(n)) null else c.getDouble(n)
     private fun required(c: Cursor, n: Int) = number(c, n) ?: Double.NaN
+
+    internal fun sections(id: Long): List<RecordingSection> {
+        val confirmed = readableDatabase.rawQuery("SELECT time FROM readings WHERE trip=? AND signal=? AND value=1",
+            arrayOf(id.toString(), RecordingSection.CHARGING_SIGNAL)).use { rows ->
+            buildSet { while (rows.moveToNext()) add(rows.getLong(0)) }
+        }
+        return RecordingSection.split(samples(id), confirmed)
+    }
+
+    internal fun sectionStats(id: Long, section: RecordingSection, mixed: Boolean): TripStats = section.stats().also {
+        if (!section.charging) addEnergyReadings(id, it, mixed)
+    }
     /** Call on a worker. Legacy summaries are derived only from saved readings. */
     fun summary(id: Long): TripSummary {
         val closed = readableDatabase.rawQuery("SELECT status FROM trips WHERE id=?", arrayOf(id.toString())).use { c ->
             require(c.moveToFirst()) { "Unknown trip" }; c.getString(0) != "recording"
         }
         if (closed) readableDatabase.rawQuery("SELECT version,stats FROM trip_summaries WHERE trip=?", arrayOf(id.toString())).use { c ->
-            if (c.moveToFirst() && c.getInt(0) == 2) try {
+            if (c.moveToFirst() && c.getInt(0) == 3) try {
                 val json = JSONObject(c.getString(1))
                 return TripSummary.fromValues(DoubleArray(TripSummary.KEYS.size) { json.optDouble(TripSummary.KEYS[it], Double.NaN) })
             } catch (_: JSONException) { }
@@ -137,13 +149,24 @@ class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOp
         return result
     }
     private fun buildSummary(id: Long): TripSummary {
-        val stats = TripStats(); samples(id).forEach(stats::add)
-        addEnergyReadings(id, stats)
-        return stats.summary()
+        val sections = sections(id)
+        val driving = sections.filterNot { it.charging }
+        if (driving.size == 1) return sectionStats(id, driving.single(), sections.size > 1).summary()
+        val stats = TripStats()
+        var duration = 0L
+        for (section in driving) {
+            stats.add(null)
+            section.samples.forEach(stats::add)
+            duration += section.samples.last().time - section.samples.first().time
+        }
+        return stats.summary().copy(durationMs = duration, startSoc = Double.NaN, endSoc = Double.NaN)
     }
 
-    internal fun addEnergyReadings(id: Long, stats: TripStats) {
-        readableDatabase.rawQuery("SELECT time,value FROM readings WHERE trip=? AND signal='energy' ORDER BY time,id", arrayOf(id.toString())).use { c ->
+    private fun addEnergyReadings(id: Long, stats: TripStats, mixed: Boolean) {
+        val bounds = if (mixed) "AND time BETWEEN ? AND ?" else ""
+        val args = if (mixed) arrayOf(id.toString(), stats.start.toString(), stats.end.toString()) else arrayOf(id.toString())
+        readableDatabase.rawQuery("SELECT time,value FROM readings WHERE trip=? AND signal='energy' $bounds ORDER BY time,id",
+            args).use { c ->
             while (c.moveToNext()) stats.energy(c.getLong(0), required(c, 1))
         }
     }
@@ -151,7 +174,7 @@ class Store(private val context: Context, name: String = "ptrack.db") : SQLiteOp
         try {
             val json = JSONObject(); val values = summary.values()
             for (i in values.indices) json.put(TripSummary.KEYS[i], if (values[i].isFinite()) values[i] else JSONObject.NULL)
-            val row = ContentValues().apply { put("trip", id); put("version", 2); put("stats", json.toString()) }
+            val row = ContentValues().apply { put("trip", id); put("version", 3); put("stats", json.toString()) }
             check(writableDatabase.insertWithOnConflict("trip_summaries", null, row, SQLiteDatabase.CONFLICT_REPLACE) >= 0) { "Summary persistence failed" }
         } catch (e: JSONException) { throw IllegalStateException("Summary serialization", e) }
     }

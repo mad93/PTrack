@@ -69,7 +69,7 @@ private fun PreviewDay(showDetail: Boolean) {
                         onCalendar = {}, onTrip = {})
                 },
                 detail = {
-                    TripDetailPane(sample, TripDetail(summary, 205.0, 119.0), false, PreviewLabels,
+                    TripDetailPane(sample, listOf(TripDetail(summary, 205.0, 119.0)), false, PreviewLabels,
                         onBack = {}, onExport = {})
                 }
             )

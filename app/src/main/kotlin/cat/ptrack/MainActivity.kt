@@ -232,7 +232,8 @@ class MainActivity : ComponentActivity() {
                         }
                     } else {
                         settingsState?.let { state ->
-                            SettingsScreen(state, buildInfo, l, ::settingsAction, ::setAutomaticRecording, ::changeLanguage)
+                            SettingsScreen(state, buildInfo, l, ::settingsAction, ::setAutomaticRecording, ::changeLanguage,
+                                routingMapInUse = plannerScreen?.isCalculating == true)
                         }
                         vehicleEditor?.let { request ->
                             VehicleEditor(request, l, onDismiss = { vehicleEditor = null },
@@ -273,9 +274,8 @@ class MainActivity : ComponentActivity() {
     private fun planner() {
         val plans = NavigationPlanStore(this)
         savedPlannerItinerary = plans.read()
-        val screen = plannerScreen ?: PlannerScreen(this, l, importMap = {
-            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
-                .setType("*/*"), OFFLINE_MAP_IMPORT)
+        val screen = plannerScreen ?: PlannerScreen(this, l, openSettings = {
+            selectDestination(Destination.SETTINGS)
         }, locate = ::locatePlannerOrigin, navigate = { draft, maps ->
             val saved = plans.read()
             val itinerary = saved?.takeIf {
@@ -346,21 +346,30 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun importRoutingMap(uri: Uri) {
+        changeRoutingMap(updating = false) { context ->
+            val input = contentResolver.openInputStream(uri) ?: throw IOException("Map file unavailable")
+            input.use { OfflineValhalla.install(context, it) }
+        }
+    }
+
+    private fun changeRoutingMap(updating: Boolean, action: (Context) -> Unit) {
+        if (importingMap || plannerScreen?.isCalculating == true) return
         importingMap = true
-        if (page == 3) showPage()
+        if (page == Destination.SETTINGS.id || page == Destination.PLANNER.id) showPage()
         io.execute {
-            val error = runCatching {
-                val context = applicationContext
-                val input = contentResolver.openInputStream(uri) ?: throw IOException("Map file unavailable")
-                input.use { OfflineValhalla.install(context, it) }
-            }.exceptionOrNull()
+            val error = runCatching { action(applicationContext) }.exceptionOrNull()
             runOnUiThread {
                 importingMap = false
                 if (isDestroyed) return@runOnUiThread
-                if (page == 3) showPage()
-                if (error == null) toast(l.t("Mapa de rutes importat.", "Mapa de rutas importado.", "Routing map imported."))
-                else {
-                    Log.w("PTrackPlanner", "Offline map import failed", error)
+                if (page == Destination.SETTINGS.id || page == Destination.PLANNER.id) showPage()
+                if (error != null) Log.w("PTrackPlanner", "Offline map change failed", error)
+                if (updating) {
+                    toast(if (error == null) l.t("Mapa de Ceuta actualitzat.", "Mapa de Ceuta actualizado.", "Ceuta map updated.")
+                    else l.t("No s’ha pogut actualitzar el mapa de Ceuta.", "No se ha podido actualizar el mapa de Ceuta.",
+                        "Could not update the Ceuta map."))
+                } else if (error == null) {
+                    toast(l.t("Mapa de rutes importat.", "Mapa de rutas importado.", "Routing map imported."))
+                } else {
                     toast(l.t("No s’ha pogut importar el mapa. Comprova el paquet i l’espai disponible.",
                         "No se ha podido importar el mapa. Comprueba el paquete y el espacio disponible.",
                         "Could not import the map. Check the package and available space."))
@@ -719,7 +728,13 @@ class MainActivity : ComponentActivity() {
             backupDate = lastBackupText(),
             backupConfigured = BackupSync.destination(this) != null,
             linkedBackups = BackupSync.sources(this).size,
-            chargingText = settingsState?.chargingText.orEmpty()
+            chargingText = settingsState?.chargingText.orEmpty(),
+            routingMapInstalled = OfflineValhalla.installed(this),
+            routingMapDate = OfflineValhalla.updatedAt(this)?.let {
+                DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT, l.locale).format(Date(it))
+            },
+            routingMapImporting = importingMap,
+            routingMapDirectUpdate = CeutaMapUpdate.available(this)
         )
         showChargingStatus()
     }
@@ -762,6 +777,13 @@ class MainActivity : ComponentActivity() {
                         "No se ha podido programar la actualización.", "Could not schedule the update."))
                 }
             }
+            SettingsAction.IMPORT_ROUTING_MAP -> {
+                if (!importingMap && plannerScreen?.isCalculating != true) {
+                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("*/*"), OFFLINE_MAP_IMPORT)
+                }
+            }
+            SettingsAction.UPDATE_ROUTING_MAP -> changeRoutingMap(updating = true, action = CeutaMapUpdate::update)
             SettingsAction.LICENSES -> showLicenses()
         }
     }
@@ -1061,6 +1083,7 @@ class MainActivity : ComponentActivity() {
         }
     }
     private fun exportJson(out: OutputStream, id: Long) {
+        store.summary(id)
         val writer = JsonWriter(OutputStreamWriter(out, Charsets.UTF_8)); writer.setIndent("  ")
         writer.beginObject().name("schema").value(2).name("tripId").value(id).name("simulation").value(store.isDemo(id))
             .name("vehicle").value(store.tripVehicle(id)).name("profile").value("Stellantis e-CMP v4; Esa Pelttari CC-BY-4.0")

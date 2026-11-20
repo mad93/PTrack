@@ -30,7 +30,7 @@ PTrack calcula i desa l'itinerari. Waze o Google Maps guien fins al punt següen
 
 ### Paquets de rutes locals
 
-**Planificador → Importa un mapa de rutes** accepta un ZIP amb aquests fitxers:
+**Configuració → Mapa de rutes** mostra la data en què PTrack va activar el paquet actual. El botó d'importació accepta un ZIP amb aquests fitxers:
 
 - `manifest.json` amb `version` igual a 1 i `origin` i `destination` com a parells `[latitud,longitud]` d'una ruta de comprovació dins del mapa.
 - `valhalla_tiles.tar`, l'extracte del graf creat amb `valhalla_build_extract` a partir de tessel·les de carretera compatibles amb Valhalla 3.9.1.
@@ -39,6 +39,10 @@ PTrack calcula i desa l'itinerari. Waze o Google Maps guien fins al punt següen
 PTrack comprova la ruta abans d'activar el paquet nou. L'actualització del mapa i la del catàleg de recàrrega són independents. Per regenerar un paquet cal preparar l'extracte OSM, configurar `mjolnir.tile_dir`, `mjolnir.tile_extract` i el directori d'elevació, executar `valhalla_build_tiles` i `valhalla_build_extract` i posar els fitxers resultants al ZIP amb l'estructura anterior. [Eines oficials de Valhalla](https://valhalla.github.io/valhalla/README_python/)
 
 El paquet pilot de Ceuta usa l'extracte de Geofabrik del 3/11/2026. Dades viàries © contribuïdors d'OpenStreetMap, ODbL 1.0. L'elevació prové de Mapzen Terrain Tiles via AWS Open Data. Les coordenades de comprovació són `35.8895,-5.3190` i `35.9143,-5.3688`. [Extracte de Ceuta](https://download.geofabrik.de/europe/spain/ceuta.html) · [Atribució d'OpenStreetMap](https://www.openstreetmap.org/copyright) · [Atribució de l'elevació](https://github.com/tilezen/joerd/blob/master/docs/attribution.md)
+
+La compilació pilot de **PTrack Prova cotxe** amb el generador inclòs mostra **Actualitza** a **Configuració → Mapa de rutes**. El botó baixa l'extracte actual de Ceuta i l'elevació, genera les tessel·les al mòbil i activa el graf si supera la mateixa ruta de comprovació. El paquet queda a l'espai privat de `cat.ptrack.cartest`. Es conserva el mapa actiu anterior si l'operació falla abans d'activar el nou.
+
+Per preparar aquesta compilació, cal executar `scripts/prepare-ceuta-builder.py` amb Python 3.10 o posterior i passar el directori generat a `-PptrackCeutaBuilder=<directori>` en executar `:app:assembleCarTest`. El primer argument de l'script és un directori amb la [roda ARM64 de PyValhalla 3.9.1](https://pypi.org/project/pyvalhalla/3.9.1/#files), [glibc 2.44 adaptada a Android per Termux](https://packages.termux.dev/apt/termux-glibc/pool/stable/g/glibc/glibc_2.44_aarch64.deb) com a `glibc-termux.deb`, [libgcc1](https://archive.debian.org/debian/pool/main/g/gcc-8/libgcc1_8.3.0-6_arm64.deb) com a `libgcc-buster.deb` i [libstdc++6](https://archive.debian.org/debian/pool/main/g/gcc-8/libstdc++6_8.3.0-6_arm64.deb) com a `libstdc-buster.deb`. El segon argument és el directori de sortida. L'script verifica els quatre SHA-256 abans d'extreure els binaris.
 
 `PTrack-Mapa-Espanya-sense-illes.zip` cobreix l'Espanya peninsular, Ceuta i Melilla. Usa l'extracte de Geofabrik del 5/11/2026 i elevacions de Mapzen. El ZIP ocupa 1,77 GiB i el paquet actiu, 2,80 GiB. Si es copia el ZIP a Baixades abans d'importar-lo, cal preveure uns 4,57 GiB per als dos fitxers durant la importació, més l'espai de qualsevol mapa anterior. PTrack llegeix el graf importat i el catàleg de carregadors des del telèfon per calcular la ruta. [Extracte d'Espanya](https://download.geofabrik.de/europe/spain.html) · [Resultats de validació](VALIDATION.md)
 

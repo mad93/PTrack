@@ -205,13 +205,14 @@ class RecordingService : Service() {
                                 cable = readSignal(profile, elm, "charging")
                                 if (cable == 0.0) dcSession = 0L
                             }
-                            if (DcChargeProfile.isExternal(sample.speed, sample.power(), cable)) {
-                                if (!keepAlive()) break
-                                if (activeTrip >= 0) finishTrip()
+                            val externalCharge = DcChargeProfile.isExternal(sample.speed, sample.power(), cable)
+                            if (!saveSample(sample)) break
+                            if (externalCharge) {
+                                if (checkCharge) store.reading(activeTrip, RecordingSection.CHARGING_SIGNAL, 1.0, null, sample.time)
+                                VehicleTelemetry.LIVE.finish(activeTrip)
                                 if (checkCharge) recordDcCharge(profile, elm, sample)
-                                latest = sample
                                 VehicleTelemetry.LIVE.externalCharge(sample, lastValid, chargeCheckAt)
-                            } else if (!accept(sample)) break
+                            } else VehicleTelemetry.LIVE.accept(activeTrip, sample, demo, lastValid)
                             bad = 0; setState("connected")
                             if (extras.isNotEmpty()) {
                                 val signal = extras[extra++ % extras.size]
@@ -303,13 +304,17 @@ class RecordingService : Service() {
         return true
     }
     private fun accept(sample: Sample): Boolean {
+        if (!saveSample(sample)) return false
+        VehicleTelemetry.LIVE.accept(activeTrip, sample, demo, lastValid)
+        return true
+    }
+    private fun saveSample(sample: Sample): Boolean {
         if (!keepAlive()) return false
         if (activeTrip < 0) {
             activeTrip = store.begin(demo, vehicleId)
             if (automatic || armed) Log.d(ObdAutoStart.TAG, "First valid OBD sample, trip started")
         }
         store.add(activeTrip, sample); latest = sample
-        VehicleTelemetry.LIVE.accept(activeTrip, sample, demo, lastValid)
         return true
     }
     private fun expire() {

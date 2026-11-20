@@ -17,14 +17,20 @@ internal object OfflineValhalla {
     private fun root(context: Context) = File(context.filesDir, "offline-routing")
     private fun active(context: Context) = AtomicFile(File(root(context), "active"))
     fun installed(context: Context) = active(context).baseFile.isFile
+    fun updatedAt(context: Context): Long? = active(context).baseFile.lastModified().takeIf { it > 0 }
 
     @Synchronized
     fun install(context: Context, input: InputStream) {
+        install(context) { directory -> OfflineMapArchive.extract(input, directory) }
+    }
+
+    @Synchronized
+    fun install(context: Context, prepare: (File) -> Unit) {
         val directory = File(root(context), "map-${UUID.randomUUID()}")
         check(directory.mkdirs())
         var activated = false
         try {
-            OfflineMapArchive.extract(input, directory)
+            prepare(directory)
             val manifest = JSONObject(File(directory, OfflineMapArchive.MANIFEST).readText())
             require(manifest.getInt("version") == 1) { "Unsupported offline map version" }
             val from = probe(manifest, "origin")

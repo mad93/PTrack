@@ -37,13 +37,17 @@ internal data class SettingsState(
     val backupConfigured: Boolean,
     val linkedBackups: Int,
     val chargingText: String = "",
-    val chargingBusy: Boolean = false
+    val chargingBusy: Boolean = false,
+    val routingMapInstalled: Boolean = false,
+    val routingMapDate: String? = null,
+    val routingMapImporting: Boolean = false,
+    val routingMapDirectUpdate: Boolean = false
 )
 
 internal enum class SettingsAction {
     CHOOSE_VEHICLE, ADD_VEHICLE, EDIT_VEHICLE, ADD_ADAPTER, LINK_ADAPTER, UNLINK_ADAPTER,
     SIMULATE, ASSOCIATE_OBD, ASSOCIATE_CAR, REMOVE_CAR, WAIT_OBD, EXPORT_BACKUP, IMPORT_BACKUP,
-    SET_BACKUP, LINK_BACKUP, SYNC_BACKUP, UNLINK_BACKUP, UPDATE_CHARGING, LICENSES
+    SET_BACKUP, LINK_BACKUP, SYNC_BACKUP, UNLINK_BACKUP, UPDATE_CHARGING, IMPORT_ROUTING_MAP, UPDATE_ROUTING_MAP, LICENSES
 }
 
 @Composable
@@ -53,7 +57,8 @@ internal fun SettingsScreen(
     labels: Labels,
     onAction: (SettingsAction) -> Unit,
     onAutomatic: (Boolean) -> Unit,
-    onLanguage: (String) -> Unit
+    onLanguage: (String) -> Unit,
+    routingMapInUse: Boolean = false
 ) {
     val wide = currentWindowAdaptiveInfoV2().windowSizeClass.isWidthAtLeastBreakpoint(840)
     BoxWithConstraints(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
@@ -74,6 +79,7 @@ internal fun SettingsScreen(
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         ObdSettings(state, labels, onAction, onAutomatic)
                         ChargingSettings(state, labels, onAction)
+                        RoutingMapSettings(state, labels, routingMapInUse, onAction)
                         BuildInfoSettings(buildInfo, labels)
                     }
                 }
@@ -82,6 +88,7 @@ internal fun SettingsScreen(
                 ObdSettings(state, labels, onAction, onAutomatic)
                 BackupSettings(state, labels, onAction)
                 ChargingSettings(state, labels, onAction)
+                RoutingMapSettings(state, labels, routingMapInUse, onAction)
                 AppSettings(labels, onAction, onLanguage)
                 BuildInfoSettings(buildInfo, labels)
             }
@@ -203,6 +210,38 @@ private fun ChargingSettings(state: SettingsState, labels: Labels, onAction: (Se
         if (state.chargingText.isNotEmpty()) Text(state.chargingText)
         SettingsButton(labels.t("Actualitza ara", "Actualizar ahora", "Update now"), enabled = !state.chargingBusy) {
             onAction(SettingsAction.UPDATE_CHARGING)
+        }
+    }
+}
+
+@Composable
+private fun RoutingMapSettings(
+    state: SettingsState,
+    labels: Labels,
+    inUse: Boolean,
+    onAction: (SettingsAction) -> Unit
+) {
+    SettingsPanel(labels.t("Mapa de rutes", "Mapa de rutas", "Routing map")) {
+        val direct = state.routingMapDirectUpdate
+        SettingsNote(if (direct) labels.t("Ceuta · descàrrega i generació del mapa al telèfon.",
+            "Ceuta · descarga y generación del mapa en el teléfono.", "Ceuta · download and build the map on this phone.")
+        else labels.t("Paquet ZIP de Valhalla per calcular rutes sense connexió.",
+            "Paquete ZIP de Valhalla para calcular rutas sin conexión.", "Valhalla ZIP package for offline routing."))
+        val date = state.routingMapDate
+        SettingsNote(when {
+            !state.routingMapInstalled -> labels.t("Cap mapa actiu.", "Ningún mapa activo.", "No active map.")
+            date == null -> labels.t("Data d’activació desconeguda.", "Fecha de activación desconocida.", "Activation date unknown.")
+            else -> labels.t("Darrera activació · $date", "Última activación · $date", "Last activated · $date")
+        })
+        val action = when {
+            direct && state.routingMapImporting -> labels.t("Actualitzant el mapa…", "Actualizando el mapa…", "Updating the map…")
+            direct -> labels.t("Actualitza", "Actualiza", "Update")
+            state.routingMapImporting -> labels.t("Important el mapa…", "Importando el mapa…", "Importing map…")
+            state.routingMapInstalled -> labels.t("Importa un mapa nou", "Importa un mapa nuevo", "Import a new map")
+            else -> labels.t("Importa un mapa de rutes", "Importa un mapa de rutas", "Import routing map")
+        }
+        SettingsButton(action, enabled = !state.routingMapImporting && !inUse) {
+            onAction(if (direct) SettingsAction.UPDATE_ROUTING_MAP else SettingsAction.IMPORT_ROUTING_MAP)
         }
     }
 }
